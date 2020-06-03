@@ -1,4 +1,4 @@
-# Welcome to the Windows Containers GitHub
+# Welcome to the Windows Containers GitHub repo
 
 This is where the Windows Containers platform team will track features and issues with Windows Containers. We will monitor this repo in order to engage with our community and discuss questions, customer scenarios, or feature requests.
 
