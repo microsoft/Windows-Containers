@@ -2,6 +2,8 @@
 
 This is where the Windows Containers platform team will track features and issues with Windows Containers. We will monitor this repo in order to engage with our community and discuss questions, customer scenarios, or feature requests.
 
+Checkout our projects tab to see the roadmap for Windows Containers!
+
 # Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
