@@ -371,11 +371,11 @@ Install-ContainerHost
     {
         if ($NATSubnet)
         {
-            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet
+            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage
         }
         else
         {
-            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath
+            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage
         }
     }
 
