@@ -131,11 +131,7 @@
     
 #### Examples
     
-    PS C:\>.\Install-ContainerHost.ps1
+    PS C:\>.\install-docker-ce.ps1
     
 #### Prerequisites
 Requires PowerShell version 5.0
-
-
-
-

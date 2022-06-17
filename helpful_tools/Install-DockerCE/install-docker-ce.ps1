@@ -1,9 +1,6 @@
 
 ############################################################
-# Script assembled with makeps1.js from
-# Install-ContainerHost-Source.ps1
-# ..\common\ContainerHost-Common.ps1
-# Install-ContainerHost-Main.ps1
+# Script to install the community edition of docker on Windows
 ############################################################
 
 <#
