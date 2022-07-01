@@ -619,7 +619,7 @@ Install-Docker()
 
     if(-not [string]::IsNullOrEmpty($ContainerBaseImage)) {
         Write-Output "Attempting to pull specified base image: $ContainerBaseImage"
-        nerdctl pull $ContainerBaseImage
+        docker pull $ContainerBaseImage
     }
 
     Write-Output "The following images are present on this machine:"
