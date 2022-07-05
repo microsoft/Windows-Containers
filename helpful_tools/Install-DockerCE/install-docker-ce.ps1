@@ -61,11 +61,11 @@
 param(
     [string]
     [ValidateNotNullOrEmpty()]
-    $DockerPath = "https://master.dockerproject.org/windows/amd64/docker.exe",
+    $DockerPath = "https://master.dockerproject.org/windows/x86_64/docker.exe",
 
     [string]
     [ValidateNotNullOrEmpty()]
-    $DockerDPath = "https://master.dockerproject.org/windows/amd64/dockerd.exe",
+    $DockerDPath = "https://master.dockerproject.org/windows/x86_64/dockerd.exe",
 
     [string]
     $ExternalNetAdapter,
