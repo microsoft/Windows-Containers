@@ -64,11 +64,11 @@
 param(
     [string]
     [ValidateNotNullOrEmpty()]
-    $DockerPath = "https://master.dockerproject.org/windows/amd64/docker.exe",
+    $DockerPath = "https://master.dockerproject.org/windows/x86_64/docker.exe",
 
     [string]
     [ValidateNotNullOrEmpty()]
-    $DockerDPath = "https://master.dockerproject.org/windows/amd64/dockerd.exe",
+    $DockerDPath = "https://master.dockerproject.org/windows/x86_64/dockerd.exe",
 
     [string]
     $ExternalNetAdapter,
@@ -628,7 +628,7 @@ Install-Docker()
 
     if(-not [string]::IsNullOrEmpty($ContainerBaseImage)) {
         Write-Output "Attempting to pull specified base image: $ContainerBaseImage"
-        nerdctl pull $ContainerBaseImage
+        docker pull $ContainerBaseImage
     }
 
     Write-Output "The following images are present on this machine:"
