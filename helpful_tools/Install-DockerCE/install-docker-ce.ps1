@@ -30,6 +30,9 @@
     .PARAMETER ExternalNetAdapter
         Specify a specific network adapter to bind to a DHCP network
 
+    .PARAMETER SkipDefaultHost
+        Prevents setting localhost as the default n
+
     .PARAMETER Force 
         If a restart is required, forces an immediate restart.
         
@@ -75,6 +78,9 @@ param(
 
     [switch]
     $HyperV,
+
+    [switch]
+    $SkipDefaultHost,
 
     [string]
     $NATSubnet,
@@ -556,6 +562,9 @@ Install-Docker()
         [ValidateNotNullOrEmpty()]
         $NATSubnet,
 
+        [switch]
+        $SkipDefaultHost,
+
         [string]
         $ContainerBaseImage
     )
@@ -593,7 +602,7 @@ Install-Docker()
         $daemonSettings | Add-Member NoteProperty tlscert (Join-Path $certsPath "server-cert.pem")
         $daemonSettings | Add-Member NoteProperty tlskey (Join-Path $certsPath "server-key.pem")
     }
-    else
+    elseif (!$SkipDefaultHost.IsPresent)
     {
         # Default local host
         $daemonSettings | Add-Member NoteProperty hosts @("npipe://")
