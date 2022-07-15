@@ -526,11 +526,11 @@ Install-Containerd()
     param(
         [string]
         [ValidateNotNullOrEmpty()]
-        $ContainerdVersion = "1.6.4",
+        $ContainerdVersion = "1.6.6",
 
         [string]
         [ValidateNotNullOrEmpty()]
-        $NerdCTLVersion = "0.20.0",
+        $NerdCTLVersion = "0.21.0",
 
         [string]
         [ValidateNotNullOrEmpty()]
