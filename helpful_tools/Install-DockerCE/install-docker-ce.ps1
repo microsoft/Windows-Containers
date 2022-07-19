@@ -451,7 +451,7 @@ Copy-File
             # We disable progress display because it kills performance for large downloads (at least on 64-bit PowerShell)
             #
             $ProgressPreference = 'SilentlyContinue'
-            wget -Uri $SourcePath -OutFile $DestinationPath -UseBasicParsing
+            Invoke-RestMethod -Uri $SourcePath -OutFile $DestinationPath -UseBasicParsing
             $ProgressPreference = 'Continue'
         }
         else
