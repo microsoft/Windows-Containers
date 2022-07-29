@@ -1,0 +1,190 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "taskType": "trigger",
+      "capabilityId": "IssueResponder",
+      "subCapability": "IssuesOnlyResponder",
+      "version": "1.0",
+      "config": {
+        "taskName": "Add needs triage label to new issues",
+        "conditions": {
+          "operator": "and",
+          "operands": [
+            {
+              "name": "isAction",
+              "parameters": {
+                "action": "opened"
+              }
+            },
+            {
+              "operator": "not",
+              "operands": [
+                {
+                  "name": "isPartOfProject",
+                  "parameters": {}
+                }
+              ]
+            },
+            {
+              "operator": "not",
+              "operands": [
+                {
+                  "name": "isAssignedToSomeone",
+                  "parameters": {}
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "name": "addLabel",
+            "parameters": {
+              "label": "triage"
+            }
+          }
+        ],
+        "eventType": "issue",
+        "eventNames": [
+          "issues",
+          "project_card"
+        ]
+      },
+      "id": "3tcc_z0EJyw"
+    },
+    {
+      "taskType": "scheduled",
+      "capabilityId": "ScheduledSearch",
+      "subCapability": "ScheduledSearch",
+      "version": "1.1",
+      "id": "bf_8OF-bM",
+      "config": {
+        "frequency": [
+          {
+            "weekDay": 0,
+            "hours": [
+              9
+            ],
+            "timezoneOffset": -7
+          },
+          {
+            "weekDay": 1,
+            "hours": [
+              9
+            ],
+            "timezoneOffset": -7
+          },
+          {
+            "weekDay": 2,
+            "hours": [
+              9
+            ],
+            "timezoneOffset": -7
+          },
+          {
+            "weekDay": 3,
+            "hours": [
+              9
+            ],
+            "timezoneOffset": -7
+          },
+          {
+            "weekDay": 4,
+            "hours": [
+              9
+            ],
+            "timezoneOffset": -7
+          },
+          {
+            "weekDay": 5,
+            "hours": [
+              9
+            ],
+            "timezoneOffset": -7
+          },
+          {
+            "weekDay": 6,
+            "hours": [
+              9
+            ],
+            "timezoneOffset": -7
+          }
+        ],
+        "searchTerms": [
+          {
+            "name": "noActivitySince",
+            "parameters": {
+              "days": 30
+            }
+          },
+          {
+            "name": "isOpen",
+            "parameters": {}
+          },
+          {
+            "name": "noLabel",
+            "parameters": {
+              "label": "In progress"
+            }
+          },
+          {
+            "name": "noLabel",
+            "parameters": {
+              "label": "enhancement"
+            }
+          }
+        ],
+        "taskName": "Request update on items not updated on 30 days",
+        "actions": [
+          {
+            "name": "addReply",
+            "parameters": {
+              "comment": "This issue has been open for 30 days with no updates.\n${assignees}, please provide an update or close this issue."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "taskType": "scheduled",
+      "capabilityId": "ScheduledSearch",
+      "subCapability": "ScheduledSearch",
+      "version": "1.1",
+      "id": "8FA_BzzKd",
+      "config": {
+        "frequency": [
+          {
+            "weekDay": 1,
+            "hours": [
+              9
+            ],
+            "timezoneOffset": -8
+          }
+        ],
+        "searchTerms": [
+          {
+            "name": "noActivitySince",
+            "parameters": {
+              "days": 90
+            }
+          },
+          {
+            "name": "isOpen",
+            "parameters": {}
+          }
+        ],
+        "taskName": "Request update on items not updated on 90 days",
+        "actions": [
+          {
+            "name": "addReply",
+            "parameters": {
+              "comment": "This issue has been open for 90 days with no updates.\n${assignees}, please provide an update or close this issue."
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "userGroups": []
+}
