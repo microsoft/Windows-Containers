@@ -92,7 +92,7 @@ param(
     [switch]
     $PSDirect,
 
-    [switch]
+    [string]
     $ContainerBaseImage,
 
     [Parameter(ParameterSetName="Staging", Mandatory)]
