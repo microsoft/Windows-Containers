@@ -2,6 +2,8 @@
 
 This is where the Windows Containers platform team will track features and issues with Windows Containers. We will monitor this repo in order to engage with our community and discuss questions, customer scenarios, or feature requests. Checkout our projects tab to see the roadmap for Windows Containers!
 
+Looking to get started with Windows Containers? Take a look at our documentation here aka.ms/containers/install, and give us feedback on documentation you'd like to see!
+
 *Note: for specific bugs/issues in the platform, we ask that you please first use the Issues tracker here on Github instead*
 
 # Contributing
