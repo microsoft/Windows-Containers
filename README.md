@@ -4,6 +4,8 @@ This is where the Windows Containers platform team will track features and issue
 
 Looking to get started with Windows Containers? Take a look at our documentation here [aka.ms/containers/install](https://aka.ms/containers/install), and give us feedback on documentation you'd like to see!
 
+Looking for tools to augment the Windows Container experience? Please visit Windows Container Tools repo [here] (https://github.com/microsoft/windows-container-tools).
+
 *Note: for specific bugs/issues in the platform, we ask that you please first use the Issues tracker here on Github instead*
 
 # Contributing
