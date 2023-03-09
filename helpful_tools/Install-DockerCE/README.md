@@ -99,7 +99,7 @@
         Accept wildcard characters?  false
         
     -ContainerBaseImage [<String>]
-        Use this to specify the URI of the container base image you wish to pull
+        Use this to specify the URI of the container base image you wish to pre-pull
         
         Required?                    false
         Position?                    named
