@@ -1,23 +1,15 @@
-## Install-ContainerHost.ps1
+## install-docker-ce.ps1
 
 #### NAME
-    Install-ContainerHost.ps1
+    install-docker-ce.ps1
     
 #### SYNOPSIS
-    Installs the prerequisites for creating Windows containers
+    Installs the prerequisites for running Windows containers with docker CE
     
 #### SYNTAX
-    Install-ContainerHost.ps1 [-DockerPath <String>] [-ExternalNetAdapter <String>] 
-    [-Force] [-HyperV] [-NoRestart] [-PSDirect] [-SkipImageImport]  
-    [-UseDHCP] [-WimPath <String>] [<CommonParameters>]
-    
-    Install-ContainerHost.ps1 [-DockerPath <String>] [-ExternalNetAdapter <String>] 
-    [-Force] [-HyperV] [-NoRestart] [-PSDirect] 
-    [-SkipImageImport] [-UseDHCP] [-WimPath <String>] [<CommonParameters>]
-    
-    Install-ContainerHost.ps1 [-DockerPath <String>] [-ExternalNetAdapter <String>] 
-    [-Force] [-HyperV] [-NoRestart] [-PSDirect]  
-    [-SkipImageImport] -Staging [-UseDHCP] [-WimPath <String>] [<CommonParameters>]
+    install-docker-ce.ps1 [-DockerPath <String>] [-DockerDPath <String>] [-DockerVersion <String>] [-ContainerBaseImage <String>] [-ExternalNetAdapter <String>] 
+    [-Force] [-HyperV] [-SkipDefaultHost] [-NATSubnet <String>] [-NoRestart] [-PSDirect] [-Staging] 
+    [-UseDHCP] [-WimPath <String>] [-TarPath] [<CommonParameters>]
     
     
 #### DESCRIPTION
@@ -25,21 +17,48 @@
     
 
 #### PARAMETERS
-    -DockerPath <String>
-        Path to Docker.exe, can be local or URI
+    -DockerPath [<String>]
+        Path to Docker.exe, can be local or URI.
         
-        Required?                    false
+        Required?                    True
         Position?                    named
-        Default value                https://aka.ms/tp4/docker
+        Default value                default
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -DockerDPath [<String>]
+        Path to DockerD.exe, can be local or URI.
+        
+        Required?                    True
+        Position?                    named
+        Default value                default
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -DockerVersion [<String>]
+        The version of docker to use.
+        
+        Required?                    True
+        Position?                    named
+        Default value                latest
         Accept pipeline input?       false
         Accept wildcard characters?  false
         
-    -ExternalNetAdapter <String>
-        Specify a specific network adapter to bind to a DHCP switch
+    -ExternalNetAdapter [<String>]
+        Specify a specific network adapter to bind to a DHCP switch.
         
         Required?                    false
         Position?                    named
         Default value                
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -SkipDefaultHost [<SwitchParameter>]
+        Prevents setting localhost as the default network configuration.
+
+        Required?                    false
+        Position?                    named
+        Default value                False
         Accept pipeline input?       false
         Accept wildcard characters?  false
         
@@ -60,6 +79,15 @@
         Default value                False
         Accept pipeline input?       false
         Accept wildcard characters?  false
+
+    -NATSubnet [<String>]
+        Use to override the default Docker NAT Subnet when in NAT mode.
+
+        Required?                    false
+        Position?                    named
+        Default value                
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
         
     -NoRestart [<SwitchParameter>]
         If a restart is required the script will terminate and will not reboot the machine
@@ -70,20 +98,12 @@
         Accept pipeline input?       false
         Accept wildcard characters?  false
         
-    -PSDirect [<SwitchParameter>]
+    -ContainerBaseImage [<String>]
+        Use this to specify the URI of the container base image you wish to pull
         
         Required?                    false
         Position?                    named
-        Default value                False
-        Accept pipeline input?       false
-        Accept wildcard characters?  false
-        
-    -SkipImageImport [<SwitchParameter>]
-        Skips import of the base WindowsServerCore image.
-        
-        Required?                    false
-        Position?                    named
-        Default value                False
+        Default value                
         Accept pipeline input?       false
         Accept wildcard characters?  false
         
@@ -103,20 +123,14 @@
         Accept pipeline input?       false
         Accept wildcard characters?  false
         
-    -WimPath <String>
-        Path to .wim file that contains the base package image
+    -TarPath <String>
+        Path to the .tar that is the base image to load into Docker.
         
         Required?                    false
         Position?                    named
         Default value                
         Accept pipeline input?       false
         Accept wildcard characters?  false
-        
-    <CommonParameters>
-        This cmdlet supports the common parameters: Verbose, Debug,
-        ErrorAction, ErrorVariable, WarningAction, WarningVariable,
-        OutBuffer, PipelineVariable, and OutVariable. For more information, see 
-        about_CommonParameters (http://go.microsoft.com/fwlink/?LinkID=113216). 
         
 #### NOTES
         Copyright (c) Microsoft Corporation.  All rights reserved.

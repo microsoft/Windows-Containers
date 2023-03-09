@@ -27,11 +27,14 @@
     .PARAMETER DockerDPath
         Path to DockerD.exe, can be local or URI
 
+    .PARAMETER DockerVersion
+        Version of docker to pull from download.docker.com - ! OVERRIDDEN BY DockerPath & DockerDPath
+
     .PARAMETER ExternalNetAdapter
         Specify a specific network adapter to bind to a DHCP network
 
     .PARAMETER SkipDefaultHost
-        Prevents setting localhost as the default n
+        Prevents setting localhost as the default network configuration
 
     .PARAMETER Force 
         If a restart is required, forces an immediate restart.
@@ -46,7 +49,9 @@
         If a restart is required the script will terminate and will not reboot the machine
 
     .PARAMETER ContainerBaseImage
-        Use this to specifiy the URI of the container base image you wish to pull
+        Use this to specify the URI of the container base image you wish to pull
+
+    .PARAMETER Staging
 
     .PARAMETER TransparentNetwork
         If passed, use DHCP configuration.  Otherwise, will use default docker network (NAT). (alias -UseDHCP)
@@ -55,7 +60,7 @@
         Path to the .tar that is the base image to load into Docker.
 
     .EXAMPLE
-        .\Install-ContainerHost.ps1
+        .\install-docker-ce.ps1
 
 #>
 #Requires -Version 5.0
@@ -64,11 +69,15 @@
 param(
     [string]
     [ValidateNotNullOrEmpty()]
-    $DockerPath = "https://master.dockerproject.org/windows/x86_64/docker.exe",
+    $DockerPath = "default",
 
     [string]
     [ValidateNotNullOrEmpty()]
-    $DockerDPath = "https://master.dockerproject.org/windows/x86_64/dockerd.exe",
+    $DockerDPath = "default",
+
+    [string]
+    [ValidateNotNullOrEmpty()]
+    $DockerVersion = "latest",
 
     [string]
     $ExternalNetAdapter,
@@ -88,10 +97,6 @@ param(
     [switch]
     $NoRestart,
 
-    [Parameter(DontShow)]
-    [switch]
-    $PSDirect,
-
     [string]
     $ContainerBaseImage,
 
@@ -109,12 +114,14 @@ param(
 )
 
 $global:RebootRequired = $false
-
 $global:ErrorFile = "$pwd\Install-ContainerHost.err"
-
 $global:BootstrapTask = "ContainerBootstrap"
-
 $global:HyperVImage = "NanoServer"
+$global:AdminPriviledges = $false
+
+$global:DefaultDockerLocation = "https://download.docker.com/win/static/stable/x86_64/"
+$global:DockerDataPath = "$($env:ProgramData)\docker"
+$global:DockerServiceName = "docker"
 
 function
 Restart-And-Run()
@@ -393,9 +400,7 @@ Install-ContainerHost
     Remove-Item $global:ErrorFile
 
     Write-Output "Script complete!"
-}$global:AdminPriviledges = $false
-$global:DockerDataPath = "$($env:ProgramData)\docker"
-$global:DockerServiceName = "docker"
+}
 
 function
 Copy-File
@@ -552,11 +557,11 @@ Install-Docker()
     param(
         [string]
         [ValidateNotNullOrEmpty()]
-        $DockerPath = "https://master.dockerproject.org/windows/x86_64/docker.exe",
+        $DockerPath = "default",
 
         [string]
         [ValidateNotNullOrEmpty()]
-        $DockerDPath = "https://master.dockerproject.org/windows/x86_64/dockerd.exe",
+        $DockerDPath = "default",
                 
         [string]
         [ValidateNotNullOrEmpty()]
@@ -571,10 +576,49 @@ Install-Docker()
 
     Test-Admin
 
-    Write-Output "Installing Docker..."
+    try {
+        #If one of these are set to default then the whole .zip needs to be downloaded anyways.
+        Write-Output "DOCKER $DockerPath"
+        if ($DockerPath -eq "default" -or $DockerDPath -eq "default") {
+            Write-Output "Checking Docker version"
+            $version = ((Invoke-WebRequest -Uri $DefaultDockerLocation).Links | Where-Object {$_.href -like "docker*"}).href | Sort-Object -Descending | Select-Object -First 1  | Select-String -Pattern "docker-(\d+\.\d+\.\d+).+"  -AllMatches | Select-Object -Expand Matches | %{ $_.Groups[1].Value }
+
+            if($DockerVersion -ne "latest") {
+                $version = $DockerVersion
+            } else {
+                if(!(((Invoke-WebRequest -Uri $global:DefaultDockerLocation).Links | Where-Object {$_.href -like "*$global:DockerVersion*"}).href | Sort-Object -Descending | Select-Object -First 1)) {
+                    Write-Error "Docker version supplied $global:DockerVersion was invalid, using the latest version."
+                }
+            }
+
+            $zipUrl = $global:DefaultDockerLocation + "docker-$version.zip"
+            $destinationFolder = "$env:UserProfile\DockerDownloads"
+
+            if(!(Test-Path "$destinationFolder")) {
+                md -Path $destinationFolder | Out-Null
+            } elseif(Test-Path "$destinationFolder\docker-$version") {
+                Remove-Item -Recurse -Force "$destinationFolder\docker-$version"
+            }
+
+            Write-Output "Downloading $zipUrl to $destinationFolder\docker-$version.zip"
+            Copy-File -SourcePath $zipUrl -DestinationPath "$destinationFolder\docker-$version.zip"
+            Expand-Archive -Path "$destinationFolder\docker-$version.zip" -DestinationPath "$destinationFolder\docker-$version"
+
+            if($DockerPath -eq "default") {
+                $DockerPath = "$destinationFolder\docker-$version\docker\docker.exe"
+            }
+            if($DockerDPath -eq "default") {
+                $DockerDPath = "$destinationFolder\docker-$version\docker\dockerd.exe"
+            }
+        }
+    } catch {
+        Write-Error "Failed to download the latest docker version: $_"
+    }
+
+    Write-Output "Installing Docker... $DockerPath"
     Copy-File -SourcePath $DockerPath -DestinationPath $env:windir\System32\docker.exe
         
-    Write-Output "Installing Docker daemon..."
+    Write-Output "Installing Docker daemon... $DockerDPath"
     Copy-File -SourcePath $DockerDPath -DestinationPath $env:windir\System32\dockerd.exe
     
     $dockerConfigPath = Join-Path $global:DockerDataPath "config"
