@@ -576,43 +576,44 @@ Install-Docker()
 
     Test-Admin
 
-    try {
-        #If one of these are set to default then the whole .zip needs to be downloaded anyways.
-        Write-Output "DOCKER $DockerPath"
-        if ($DockerPath -eq "default" -or $DockerDPath -eq "default") {
-            Write-Output "Checking Docker version"
-            $version = ((Invoke-WebRequest -Uri $DefaultDockerLocation).Links | Where-Object {$_.href -like "docker*"}).href | Sort-Object -Descending | Select-Object -First 1  | Select-String -Pattern "docker-(\d+\.\d+\.\d+).+"  -AllMatches | Select-Object -Expand Matches | %{ $_.Groups[1].Value }
+    #If one of these are set to default then the whole .zip needs to be downloaded anyways.
+    Write-Output "DOCKER $DockerPath"
+    if ($DockerPath -eq "default" -or $DockerDPath -eq "default") {
+        Write-Output "Checking Docker versions"
+        #Get the list of .zip packages available from docker.
+        $availableVersions = ((Invoke-WebRequest -Uri $DefaultDockerLocation).Links | Where-Object {$_.href -like "docker*"}).href | Sort-Object -Descending
+        
+        #Parse the versions from the file names
+        $availableVersions = ($availableVersions | Select-String -Pattern "docker-(\d+\.\d+\.\d+).+"  -AllMatches | Select-Object -Expand Matches | %{ $_.Groups[1].Value })
+        $version = $availableVersions[0]
 
-            if($DockerVersion -ne "latest") {
-                $version = $DockerVersion
-            } else {
-                if(!(((Invoke-WebRequest -Uri $global:DefaultDockerLocation).Links | Where-Object {$_.href -like "*$global:DockerVersion*"}).href | Sort-Object -Descending | Select-Object -First 1)) {
-                    Write-Error "Docker version supplied $global:DockerVersion was invalid, using the latest version."
-                }
-            }
-
-            $zipUrl = $global:DefaultDockerLocation + "docker-$version.zip"
-            $destinationFolder = "$env:UserProfile\DockerDownloads"
-
-            if(!(Test-Path "$destinationFolder")) {
-                md -Path $destinationFolder | Out-Null
-            } elseif(Test-Path "$destinationFolder\docker-$version") {
-                Remove-Item -Recurse -Force "$destinationFolder\docker-$version"
-            }
-
-            Write-Output "Downloading $zipUrl to $destinationFolder\docker-$version.zip"
-            Copy-File -SourcePath $zipUrl -DestinationPath "$destinationFolder\docker-$version.zip"
-            Expand-Archive -Path "$destinationFolder\docker-$version.zip" -DestinationPath "$destinationFolder\docker-$version"
-
-            if($DockerPath -eq "default") {
-                $DockerPath = "$destinationFolder\docker-$version\docker\docker.exe"
-            }
-            if($DockerDPath -eq "default") {
-                $DockerDPath = "$destinationFolder\docker-$version\docker\dockerd.exe"
+        if($DockerVersion -ne "latest") {
+            $version = $DockerVersion
+            if(!($availableVersions | Select-String $DockerVersion)) {
+                Write-Error "Docker version supplied $DockerVersion was invalid, please choose from the list of available versions: $availableVersions"
+                throw "Invalid docker version supplied."
             }
         }
-    } catch {
-        Write-Error "Failed to download the latest docker version: $_"
+
+        $zipUrl = $global:DefaultDockerLocation + "docker-$version.zip"
+        $destinationFolder = "$env:UserProfile\DockerDownloads"
+
+        if(!(Test-Path "$destinationFolder")) {
+            md -Path $destinationFolder | Out-Null
+        } elseif(Test-Path "$destinationFolder\docker-$version") {
+            Remove-Item -Recurse -Force "$destinationFolder\docker-$version"
+        }
+
+        Write-Output "Downloading $zipUrl to $destinationFolder\docker-$version.zip"
+        Copy-File -SourcePath $zipUrl -DestinationPath "$destinationFolder\docker-$version.zip"
+        Expand-Archive -Path "$destinationFolder\docker-$version.zip" -DestinationPath "$destinationFolder\docker-$version"
+
+        if($DockerPath -eq "default") {
+            $DockerPath = "$destinationFolder\docker-$version\docker\docker.exe"
+        }
+        if($DockerDPath -eq "default") {
+            $DockerDPath = "$destinationFolder\docker-$version\docker\dockerd.exe"
+        }
     }
 
     Write-Output "Installing Docker... $DockerPath"
