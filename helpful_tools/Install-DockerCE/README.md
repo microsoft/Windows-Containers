@@ -4,7 +4,7 @@
     install-docker-ce.ps1
     
 #### SYNOPSIS
-    Installs the prerequisites for running Windows containers with docker CE
+    Installs the prerequisites for running Windows containers with Docker CE
     
 #### SYNTAX
     install-docker-ce.ps1 [-DockerPath <String>] [-DockerDPath <String>] [-DockerVersion <String>] [-ContainerBaseImage <String>] [-ExternalNetAdapter <String>] 
