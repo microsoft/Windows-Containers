@@ -4,7 +4,7 @@
     install-docker-ce.ps1
     
 #### SYNOPSIS
-    Installs the prerequisites for running Windows containers with docker CE
+    Installs the prerequisites for running Windows containers with Docker CE
     
 #### SYNTAX
     install-docker-ce.ps1 [-DockerPath <String>] [-DockerDPath <String>] [-DockerVersion <String>] [-ContainerBaseImage <String>] [-ExternalNetAdapter <String>] 
@@ -99,7 +99,7 @@
         Accept wildcard characters?  false
         
     -ContainerBaseImage [<String>]
-        Use this to specify the URI of the container base image you wish to pull
+        Use this to specify the URI of the container base image you wish to pre-pull
         
         Required?                    false
         Position?                    named

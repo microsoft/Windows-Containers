@@ -49,7 +49,7 @@
         If a restart is required the script will terminate and will not reboot the machine
 
     .PARAMETER ContainerBaseImage
-        Use this to specify the URI of the container base image you wish to pull
+        Use this to specify the URI of the container base image you wish to pre-pull
 
     .PARAMETER Staging
 
