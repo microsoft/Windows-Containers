@@ -1,14 +1,15 @@
 # Welcome to the Windows Containers GitHub repo
 
-This is where the Windows Containers platform team will track features and issues with Windows Containers. We will monitor this repo in order to engage with our community and discuss questions, customer scenarios, or feature requests. Checkout our projects tab to see the roadmap for Windows Containers!
+This is where the Windows Containers platform team will track features and issues with Windows Containers. We will monitor this repo in order to engage with our community and discuss questions, customer scenarios, or feature requests. 
 
 Looking to get started with Windows Containers? Take a look at our documentation here [aka.ms/containers/install](https://aka.ms/containers/install), and give us feedback on documentation you'd like to see!
 
 For OSS tools to enhance the Windows Containers experience, please visit Windows Container Tools repo [here](https://github.com/microsoft/windows-container-tools). We welcome you to test out the tools, provide feedback, and contribute to the development of Windows Containers Tools.
 
-*Note: for specific bugs/issues in the platform, we ask that you please first use the Issues tracker here on Github instead*
+## Issues
+For specific bugs/issues in the Windows Container platform, we ask that you please first use the Issues tracker here on Github. Issues without clear repro steps or are inactive for more than 2 weeks will be closed.
 
-# Contributing
+## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
