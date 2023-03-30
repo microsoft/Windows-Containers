@@ -581,7 +581,7 @@ Install-Docker()
     if ($DockerPath -eq "default" -or $DockerDPath -eq "default") {
         Write-Output "Checking Docker versions"
         #Get the list of .zip packages available from docker.
-        $availableVersions = ((Invoke-WebRequest -Uri $DefaultDockerLocation).Links | Where-Object {$_.href -like "docker*"}).href | Sort-Object -Descending
+        $availableVersions = ((Invoke-WebRequest -Uri $DefaultDockerLocation -UseBasicParsing).Links | Where-Object {$_.href -like "docker*"}).href | Sort-Object -Descending
         
         #Parse the versions from the file names
         $availableVersions = ($availableVersions | Select-String -Pattern "docker-(\d+\.\d+\.\d+).+"  -AllMatches | Select-Object -Expand Matches | %{ $_.Groups[1].Value })
