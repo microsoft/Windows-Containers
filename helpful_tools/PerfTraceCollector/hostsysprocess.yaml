@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    pod: hostsysprocess
+  name: hostsysprocess
+spec:
+  securityContext:
+    windowsOptions:
+      hostProcess: true
+      runAsUserName: "NT AUTHORITY\\SYSTEM"
+  hostNetwork: true
+  containers:
+    - name: test
+      image: mcr.microsoft.com/oss/kubernetes/pause:3.9-windows-ltsc2022-amd64
+      imagePullPolicy: IfNotPresent
+      command:
+        - pause.exe
+  nodeSelector:
+    vm: "0"
