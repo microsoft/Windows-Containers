@@ -21,10 +21,11 @@
 
 # ========= Variables==========
 # storage account for uploading collected trace files
-rgName="mydemo"
-location="northeurope"
-accountName="mydemostorage"
-containerName="mydemocontainer"
+storageAccountResourceGroupName=$1
+storageAccountlocation=$2
+storageAccountName=$3
+storageAccountContainerName=$4
+subscription=$5
 sasExpiryDate=$(date -u -d '1 day' '+%Y-%m-%dT%H:%MZ')
 
 # Define the global variable full_url as azcopy.exe target
@@ -82,29 +83,27 @@ StopCollectingTraces()
 GetStorageShareURL()
 {
     accountkey=$(az storage account keys list \
-        --resource-group $rgName \
-        --account-name $accountName \
+        --resource-group $storageAccountResourceGroupName \
+        --account-name $storageAccountName \
         --query "[0].value" -o tsv)
 
     # Generate a SAS token for the container
     sastoken=$(az storage container generate-sas \
-        --account-name ${accountName} \
+        --account-name ${storageAccountName} \
         --account-key ${accountkey} \
-        --name $containerName \
+        --name $storageAccountContainerName \
         --permissions "rwdl" \
         --expiry $sasExpiryDate \
         --https-only \
         --output tsv)
 
     # Combine the URL, share name, and file path to get the full URL path
-    echo "storage_account_url:  ${storage_account_url}"
-    echo "containerName: ${containerName}"
+    echo "containerName: ${storageAccountContainerName}"
     echo "tracefile: ${tracefile}"
     echo "sas_token: ${sastoken}"
 
-    full_url="https://${accountName}.blob.core.windows.net/${containerName}/${tracefile}?${sastoken}"
+    full_url="https://${storageAccountName}.blob.core.windows.net/${storageAccountContainerName}/${tracefile}?${sastoken}"
 
-    #full_url="${storage_account_url}/${containerName}/${tracefile}?${sastoken}"
     echo $full_url
 }
 
@@ -129,7 +128,7 @@ DownloadingTraces()
 
 
 # Set the default account
-az account set --subscription "My Subscription" 
+az account set --subscription "${subscription}" 
 #step 1  
 CreateHostProcessContainer
 #step 2
