@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-a-via-pod-selector
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          pod: b
+          pod2: updated
+    - podSelector:
+        matchLabels:
+          pod: c
+  podSelector:
+    matchLabels:
+      pod: a
+  policyTypes:
+  - Ingress
