@@ -1,0 +1,46 @@
+id: 
+name: GitOps.PullRequestIssueManagement
+description: GitOps.PullRequestIssueManagement primitive
+owner: 
+resource: repository
+disabled: false
+where: 
+configuration:
+  resourceManagementConfiguration:
+    scheduledSearches:
+    - description: 
+      frequencies:
+      - daily:
+          time: 9:0
+      filters:
+      - noActivitySince:
+          days: 30
+      - isOpen
+      - isNotLabeledWith:
+          label: In progress
+      - isNotLabeledWith:
+          label: enhancement
+      actions:
+      - addReply:
+          reply: >-
+            This issue has been open for 30 days with no updates.
+
+            ${assignees}, please provide an update or close this issue.
+    - description: 
+      frequencies:
+      - weekday:
+          day: Monday
+          time: 9:0
+      filters:
+      - noActivitySince:
+          days: 90
+      - isOpen
+      actions:
+      - addReply:
+          reply: >-
+            This issue has been open for 90 days with no updates.
+
+            ${assignees}, please provide an update or close this issue.
+    eventResponderTasks: []
+onFailure: 
+onSuccess: 
