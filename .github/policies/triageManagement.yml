@@ -1,0 +1,27 @@
+id: 
+name: GitOps.PullRequestIssueManagement
+description: GitOps.PullRequestIssueManagement primitive
+owner: 
+resource: repository
+disabled: false
+where: 
+configuration:
+  triageManagementConfiguration:
+    scheduledSearches:
+    - description: 
+      frequencies:
+      - daily:
+          time: 9:0
+      filters:
+      - isOpen
+      - isNotLabeledWith:
+          label: triage
+      - isNotLabeledWith:
+          label: "Q&A :wave:"
+      - isNotAssignedToSomeone
+      actions:
+      - addLabel:
+          label: triage
+    eventResponderTasks: []
+onFailure: 
+onSuccess: 
