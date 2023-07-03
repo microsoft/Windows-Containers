@@ -20,6 +20,8 @@ configuration:
           label: In progress
       - isNotLabeledWith:
           label: enhancement
+      - isNotLabeledWith:
+          label: "Q&A :wave:"
       actions:
       - addReply:
           reply: >-
@@ -41,6 +43,18 @@ configuration:
             This issue has been open for 90 days with no updates.
 
             ${assignees}, please provide an update or close this issue.
+    - description: 
+      frequencies:
+      - daily:
+          time: 9:0
+      filters:
+      - isOpen
+      - isNotAssignedToSomeone
+      - isNotLabeledWith:
+          label: triage
+      actions:
+      - addLabel:
+          label: triage
     eventResponderTasks: []
 onFailure: 
 onSuccess: 
