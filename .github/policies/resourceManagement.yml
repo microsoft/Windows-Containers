@@ -20,6 +20,8 @@ configuration:
           label: In progress
       - isNotLabeledWith:
           label: enhancement
+      - isNotLabeledWith:
+          label: "Q&A :wave:"
       actions:
       - addReply:
           reply: >-
