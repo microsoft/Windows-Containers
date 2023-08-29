@@ -1,19 +1,28 @@
-# Welcome to the Windows Containers GitHub repo
+# Welcome to the Windows Containers GitHub Repository
 
-This is where the Windows Containers platform team will track features and issues with Windows Containers. We will monitor this repo in order to engage with our community and discuss questions, customer scenarios, or feature requests. 
+This repository is managed by the Windows Containers platform team and is dedicated to tracking features and issues related to Windows Containers. We monitor this repository to engage with our community, address questions, discuss customer scenarios, and consider feature requests.
 
-## Get Started
+## Getting Started
 
-Looking to get started with Windows Containers? Take a look at our documentation here [aka.ms/containers/install](https://aka.ms/containers/install), and give us feedback on documentation you'd like to see!
+Are you new to Windows Containers? 
+1. Start by setting up your local environment and running your first Windows container. Follow our documentation [here](https://aka.ms/containers/install) for a step-by-step guide.
+2. Next, explore our [training module](https://learn.microsoft.com/en-us/training/paths/deploy-manage-monitor-wincontainers-aks/) to learn how to deploy, manage, monitor, and operate Windows containers.
 
 ## Product Updates
 
-Please review the [Windows Container Blog](https://techcommunity.microsoft.com/t5/containers/bg-p/Containers) for the latest features and improvement updates.
+Stay informed about the latest features and improvements by visiting the [Windows Container Blog](https://techcommunity.microsoft.com/t5/containers/bg-p/Containers).
 
-For OSS tools to enhance the Windows Containers experience, please visit [Windows Container Tools repo](https://github.com/microsoft/windows-container-tools). We welcome you to test out the tools, provide feedback, and contribute to the development of Windows Containers Tools.
+For open-source tools that enhance the Windows Containers experience, visit the [Windows Container Tools repository](https://github.com/microsoft/windows-container-tools). We encourage you to test the tools, provide feedback, and contribute to the development of Windows Container Tools.
+
+## Troubleshooting
+
+Encountering issues with Windows Containers? Microsoft offers a comprehensive set of resources for troubleshooting Windows Containers:
+
+1. [Windows Containers Troubleshooting Guide](https://learn.microsoft.com/en-us/virtualization/windowscontainers/troubleshooting): This guide provides troubleshooting information for common issues encountered while working with Windows Containers.
+2. [Troubleshoot Windows Containers Training Modules](https://learn.microsoft.com/en-us/training/modules/troubleshoot-windows-containers/): This training module offers a guided troubleshooting learning path for various aspects of Windows Containers.
 
 ## Issues
-For specific bugs/issues in the Windows Container platform, we ask that you please first use the Issues tracker here on Github. Issues without clear repro steps or are inactive for more than 2 weeks will be closed.
+For specific bugs or issues related to the Windows Container platform, please use the Issues tracker on this GitHub repository. Issues without clear reproduction steps or that remain inactive for more than two weeks will be closed.
 
 ## Contributing
 
