@@ -20,6 +20,7 @@ Encountering issues with Windows Containers? Microsoft offers a comprehensive se
 
 1. [Windows Containers Troubleshooting Guide](https://learn.microsoft.com/en-us/virtualization/windowscontainers/troubleshooting): This guide provides troubleshooting information for common issues encountered while working with Windows Containers.
 2. [Troubleshoot Windows Containers Training Modules](https://learn.microsoft.com/en-us/training/modules/troubleshoot-windows-containers/): This training module offers a guided troubleshooting learning path for various aspects of Windows Containers.
+3. [Troubleshooting Kubernetes Networking on Windows](https://techcommunity.microsoft.com/t5/networking-blog/troubleshooting-kubernetes-networking-on-windows-part-1/ba-p/508648) This article highlights step-by-step instructions for addressing common networking issues.
 
 ## Issues
 For specific bugs or issues related to the Windows Container platform, please use the Issues tracker on this GitHub repository. Issues without clear reproduction steps or that remain inactive for more than two weeks will be closed.
