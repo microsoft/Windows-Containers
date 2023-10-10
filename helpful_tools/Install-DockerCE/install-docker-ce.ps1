@@ -606,8 +606,12 @@ Install-Docker()
 
         Write-Output "Downloading $zipUrl to $destinationFolder\docker-$version.zip"
         Copy-File -SourcePath $zipUrl -DestinationPath "$destinationFolder\docker-$version.zip"
-        Expand-Archive -Path "$destinationFolder\docker-$version.zip" -DestinationPath "$destinationFolder\docker-$version"
 
+        #Prevent issues with CLI non-interactive execution on Window Server 2019
+        $global:ProgressPreference = "SilentlyContinue"
+        Expand-Archive -Path "$destinationFolder\docker-$version.zip" -DestinationPath "$destinationFolder\docker-$version"
+        $global:ProgressPreference = "Continue"
+        
         if($DockerPath -eq "default") {
             $DockerPath = "$destinationFolder\docker-$version\docker\docker.exe"
         }
