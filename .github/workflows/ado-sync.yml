@@ -1,0 +1,33 @@
+name: Sync GitHub and ADO
+
+on:
+  issues:
+    types:
+      [
+        closed,
+        edited,
+        deleted,
+        reopened,
+        assigned,
+        unassigned,
+        labeled,
+        unlabeled,
+      ]
+  issue_comment:
+
+jobs:
+  build:
+    name: Sync with ADO from GitHub
+    if: ${{ github.event.label.name == 'gMSA' || contains(github.event.issue.labels.*.name, 'gMSA') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Trigger GitHub Sync"
+        uses: microsoft/gh-sync@main
+        with:
+          ado-organization-url: ${{ secrets.ADO_PROJECT_URL }}
+          ado-project: ${{ secrets.ADO_PROJECT_NAME }}
+          ado-area-path: ${{ secrets.ADO_AREA_PATH }}
+          issue-number: ${{ github.event.issue.number }}
+          github-repo: "microsoft/Windows-Containers"
+          ado-token: ${{ secrets.ADO_SYNC_TOKEN }}
+          github-token: ${{ secrets.GHP_TOKEN }}
