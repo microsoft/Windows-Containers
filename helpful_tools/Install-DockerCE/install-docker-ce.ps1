@@ -1,6 +1,9 @@
 
 ############################################################
-# Script to install the community edition of docker on Windows
+# Script assembled with makeps1.js from
+# Install-ContainerHost-Source.ps1
+# ..\common\ContainerHost-Common.ps1
+# Install-ContainerHost-Main.ps1
 ############################################################
 
 <#
@@ -22,62 +25,50 @@
         Installs the prerequisites for creating Windows containers
 
     .PARAMETER DockerPath
-        Path to Docker.exe, can be local or URI
+        Path to Docker.exe, can be local or URI (if multiple paths are provided, the first accessible path will be used).
 
     .PARAMETER DockerDPath
-        Path to DockerD.exe, can be local or URI
-
-    .PARAMETER DockerVersion
-        Version of docker to pull from download.docker.com - ! OVERRIDDEN BY DockerPath & DockerDPath
+        Path to DockerD.exe, can be local or URI (if multiple paths are provided, the first accessible path will be used).
 
     .PARAMETER ExternalNetAdapter
         Specify a specific network adapter to bind to a DHCP network
 
-    .PARAMETER SkipDefaultHost
-        Prevents setting localhost as the default network configuration
-
-    .PARAMETER Force 
+    .PARAMETER Force
         If a restart is required, forces an immediate restart.
-        
-    .PARAMETER HyperV 
+
+    .PARAMETER HyperV
         If passed, prepare the machine for Hyper-V containers
-        
-    .PARAMETER NATSubnet 
+
+    .PARAMETER NATSubnet
         Use to override the default Docker NAT Subnet when in NAT mode.
 
     .PARAMETER NoRestart
         If a restart is required the script will terminate and will not reboot the machine
 
-    .PARAMETER ContainerBaseImage
-        Use this to specify the URI of the container base image you wish to pre-pull
-
-    .PARAMETER Staging
+    .PARAMETER SkipImageImport
+        Ignored.
 
     .PARAMETER TransparentNetwork
         If passed, use DHCP configuration.  Otherwise, will use default docker network (NAT). (alias -UseDHCP)
-
+    
     .PARAMETER TarPath
         Path to the .tar that is the base image to load into Docker.
 
     .EXAMPLE
-        .\install-docker-ce.ps1
+        .\Install-ContainerHost.ps1
 
 #>
 #Requires -Version 5.0
 
 [CmdletBinding(DefaultParameterSetName="Standard")]
 param(
-    [string]
+    [string[]]
     [ValidateNotNullOrEmpty()]
-    $DockerPath = "default",
+    $DockerPath = @("https://master.mobyproject.org/windows/x86_64/docker.exe", "https://master.dockerproject.org/windows/x86_64/docker.exe"),
 
-    [string]
+    [string[]]
     [ValidateNotNullOrEmpty()]
-    $DockerDPath = "default",
-
-    [string]
-    [ValidateNotNullOrEmpty()]
-    $DockerVersion = "latest",
+    $DockerDPath = @("https://master.mobyproject.org/windows/x86_64/dockerd.exe", "https://master.dockerproject.org/windows/x86_64/dockerd.exe"),
 
     [string]
     $ExternalNetAdapter,
@@ -88,17 +79,18 @@ param(
     [switch]
     $HyperV,
 
-    [switch]
-    $SkipDefaultHost,
-
     [string]
     $NATSubnet,
 
     [switch]
     $NoRestart,
 
-    [string]
-    $ContainerBaseImage,
+    [Parameter(DontShow)]
+    [switch]
+    $PSDirect,
+
+    [switch]
+    $SkipImageImport,
 
     [Parameter(ParameterSetName="Staging", Mandatory)]
     [switch]
@@ -107,21 +99,19 @@ param(
     [switch]
     [alias("UseDHCP")]
     $TransparentNetwork,
-
+    
     [string]
     [ValidateNotNullOrEmpty()]
     $TarPath
 )
 
 $global:RebootRequired = $false
-$global:ErrorFile = "$pwd\Install-ContainerHost.err"
-$global:BootstrapTask = "ContainerBootstrap"
-$global:HyperVImage = "NanoServer"
-$global:AdminPriviledges = $false
 
-$global:DefaultDockerLocation = "https://download.docker.com/win/static/stable/x86_64/"
-$global:DockerDataPath = "$($env:ProgramData)\docker"
-$global:DockerServiceName = "docker"
+$global:ErrorFile = "$pwd\Install-ContainerHost.err"
+
+$global:BootstrapTask = "ContainerBootstrap"
+
+$global:HyperVImage = "NanoServer"
 
 function
 Restart-And-Run()
@@ -211,7 +201,8 @@ Install-Feature
     }
     else
     {
-        if ((Get-WindowsOptionalFeature -Online -FeatureName $FeatureName).State -eq "Disabled")
+        $featureState = (Get-WindowsOptionalFeature -Online -FeatureName $FeatureName).State
+        if ($featureState -eq "Disabled")
         {
             if (Test-Nano)
             {
@@ -228,7 +219,7 @@ Install-Feature
                 $global:RebootRequired = $true;
             }
         }
-        else
+        elseif ($featureState -ne $null)
         {
             Write-Output "Feature $FeatureName is already enabled."
 
@@ -243,6 +234,10 @@ Install-Feature
                 $global:RebootRequired = $true;
             }
         }
+        else
+        {
+            Write-Warning "Feature $FeatureName does not exist!"
+        }
     }
 }
 
@@ -252,15 +247,25 @@ New-ContainerTransparentNetwork
 {
     if ($ExternalNetAdapter)
     {
-        $netAdapter = (Get-NetAdapter |? {$_.Name -eq "$ExternalNetAdapter"})[0]
+        $netAdapter = (Get-NetAdapter |Where-Object {$_.Name -eq "$ExternalNetAdapter"})[0]
     }
     else
     {
-        $netAdapter = (Get-NetAdapter |? {($_.Status -eq 'Up') -and ($_.ConnectorPresent)})[0]
+        $netAdapter = (Get-NetAdapter |Where-Object {($_.Status -eq 'Up') -and ($_.ConnectorPresent)})[0]
     }
 
     Write-Output "Creating container network (Transparent)..."
-    New-ContainerNetwork -Name "Transparent" -Mode Transparent -NetworkAdapterName $netAdapter.Name | Out-Null
+    docker network create -d transparent -o com.docker.network.windowsshim.interface="$($netAdapter.Name)" "Transparent"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create transparent network."
+    }
+
+    # Transparent networks are not picked up by docker until after a service restart.
+    if (Test-Docker)
+    {
+        Restart-Service -Name $global:DockerServiceName
+        Wait-Docker
+    }
 }
 
 
@@ -269,13 +274,17 @@ Install-ContainerHost
 {
     "If this file exists when Install-ContainerHost.ps1 exits, the script failed!" | Out-File -FilePath $global:ErrorFile
 
+    $HyperVFeatureName = "Hyper-V"
+
     if (Test-Client)
     {
+        $HyperVFeatureName = "Microsoft-Hyper-V"
+
         if (-not $HyperV)
         {
             Write-Output "Enabling Hyper-V containers by default for Client SKU"
             $HyperV = $true
-        }    
+        }
     }
     #
     # Validate required Windows features
@@ -284,7 +293,7 @@ Install-ContainerHost
 
     if ($HyperV)
     {
-        Install-Feature -FeatureName Hyper-V
+        Install-Feature -FeatureName $HyperVFeatureName
     }
 
     if ($global:RebootRequired)
@@ -304,73 +313,6 @@ Install-ContainerHost
     if ((Get-ScheduledTask -TaskName $global:BootstrapTask -ErrorAction SilentlyContinue) -ne $null)
     {
         Unregister-ScheduledTask -TaskName $global:BootstrapTask -Confirm:$false
-    }    
-
-    #
-    # Configure networking
-    #
-    if ($($PSCmdlet.ParameterSetName) -ne "Staging")
-    {
-        if ($TransparentNetwork)
-        {
-            Write-Output "Waiting for Hyper-V Management..."
-            $networks = $null
-
-            try
-            {
-                $networks = Get-ContainerNetwork -ErrorAction SilentlyContinue
-            }
-            catch
-            {
-                #
-                # If we can't query network, we are in bootstrap mode.  Assume no networks
-                #
-            }
-
-            if ($networks.Count -eq 0)
-            {
-                Write-Output "Enabling container networking..."
-                New-ContainerTransparentNetwork
-            }
-            else
-            {
-                Write-Output "Networking is already configured.  Confirming configuration..."
-                
-                $transparentNetwork = $networks |? { $_.Mode -eq "Transparent" }
-
-                if ($transparentNetwork -eq $null)
-                {
-                    Write-Output "We didn't find a configured external network; configuring now..."
-                    New-ContainerTransparentNetwork
-                }
-                else
-                {
-                    if ($ExternalNetAdapter)
-                    {
-                        $netAdapters = (Get-NetAdapter |? {$_.Name -eq "$ExternalNetAdapter"})
-
-                        if ($netAdapters.Count -eq 0)
-                        {
-                            throw "No adapters found that match the name $ExternalNetAdapter"
-                        }
-
-                        $netAdapter = $netAdapters[0]
-                        $transparentNetwork = $networks |? { $_.NetworkAdapterName -eq $netAdapter.InterfaceDescription }
-
-                        if ($transparentNetwork -eq $null)
-                        {
-                            throw "One or more external networks are configured, but not on the requested adapter ($ExternalNetAdapter)"
-                        }
-
-                        Write-Output "Configured transparent network found: $($transparentNetwork.Name)"
-                    }
-                    else
-                    {
-                        Write-Output "Configured transparent network found: $($transparentNetwork.Name)"
-                    }
-                }
-            }
-        }
     }
 
     #
@@ -384,11 +326,67 @@ Install-ContainerHost
     {
         if ($NATSubnet)
         {
-            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage
+            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet
         }
         else
         {
-            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage
+            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath
+        }
+    }
+
+    if ($SkipDockerPSModule)
+    {
+        Write-Output "Skipping installation of Docker PowerShell module"
+    }
+    else
+    {
+        Install-DockerPowerShell
+    }
+
+    #
+    # Configure networking
+    #
+    if ($($PSCmdlet.ParameterSetName) -ne "Staging")
+    {
+        if ($TransparentNetwork)
+        {
+            Write-Output "Waiting for Hyper-V Management..."
+
+            $networksNames = (docker network ls --filter driver=transparent --format "{{.Name}}")
+            if ($networksNames.Count -eq 0)
+            {
+                Write-Output "Enabling container networking..."
+                New-ContainerTransparentNetwork
+            }
+            else
+            {
+                Write-Output "Networking is already configured.  Confirming configuration..."
+
+                if ($ExternalNetAdapter)
+                {
+                    $netAdapters = (Get-NetAdapter |Where-Object {$_.Name -eq "$ExternalNetAdapter"})
+
+                    if ($netAdapters.Count -eq 0)
+                    {
+                        throw "No adapters found that match the name $ExternalNetAdapter"
+                    }
+
+                    $netAdapter = $netAdapters[0]
+                    $transparentNetwork = $networksNames |Where-Object { "vEthernet ($_)" -eq $netAdapter.Name }
+
+                    if ($transparentNetwork -eq $null)
+                    {
+                        throw "One or more external networks are configured, but not on the requested adapter ($ExternalNetAdapter)"
+                    }
+
+                    Write-Output "Configured transparent network found: $($transparentNetwork)"
+                }
+                else
+                {
+                    Write-Output "Configured transparent networks found:"
+                    Write-Output $networksNames
+                }
+            }
         }
     }
 
@@ -400,75 +398,109 @@ Install-ContainerHost
     Remove-Item $global:ErrorFile
 
     Write-Output "Script complete!"
-}
+}$global:AdminPriviledges = $false
+$global:DockerDataPath = "$($env:ProgramData)\docker"
+$global:DockerServiceName = "docker"
 
 function
 Copy-File
 {
     [CmdletBinding()]
     param(
-        [string]
+        [string[]]
         $SourcePath,
         
         [string]
         $DestinationPath
     )
-    
-    if ($SourcePath -eq $DestinationPath)
-    {
-        return
-    }
-          
-    if (Test-Path $SourcePath)
-    {
-        Copy-Item -Path $SourcePath -Destination $DestinationPath
-    }
-    elseif (($SourcePath -as [System.URI]).AbsoluteURI -ne $null)
-    {
-        if (Test-Nano)
-        {
-            $handler = New-Object System.Net.Http.HttpClientHandler
-            $client = New-Object System.Net.Http.HttpClient($handler)
-            $client.Timeout = New-Object System.TimeSpan(0, 30, 0)
-            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new() 
-            $responseMsg = $client.GetAsync([System.Uri]::new($SourcePath), $cancelTokenSource.Token)
-            $responseMsg.Wait()
 
-            if (!$responseMsg.IsCanceled)
-            {
-                $response = $responseMsg.Result
-                if ($response.IsSuccessStatusCode)
-                {
-                    $downloadedFileStream = [System.IO.FileStream]::new($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
-                    $copyStreamOp = $response.Content.CopyToAsync($downloadedFileStream)
-                    $copyStreamOp.Wait()
-                    $downloadedFileStream.Close()
-                    if ($copyStreamOp.Exception -ne $null)
-                    {
-                        throw $copyStreamOp.Exception
-                    }      
-                }
-            }  
-        }
-        elseif ($PSVersionTable.PSVersion.Major -ge 5)
-        {
-            #
-            # We disable progress display because it kills performance for large downloads (at least on 64-bit PowerShell)
-            #
-            $ProgressPreference = 'SilentlyContinue'
-            Invoke-WebRequest -Uri $SourcePath -OutFile $DestinationPath -UseBasicParsing
-            $ProgressPreference = 'Continue'
-        }
-        else
-        {
-            $webClient = New-Object System.Net.WebClient
-            $webClient.DownloadFile($SourcePath, $DestinationPath)
-        } 
-    }
-    else
+    foreach ($currentSourcePath in @($SourcePath))
     {
-        throw "Cannot copy from $SourcePath"
+        try
+        {
+            if ($currentSourcePath -eq $DestinationPath)
+            {
+                return
+            }
+                
+            if (Test-Path $currentSourcePath)
+            {
+                Copy-Item -Path $currentSourcePath -Destination $DestinationPath
+            }
+            elseif (($currentSourcePath -as [System.URI]).AbsoluteURI -ne $null)
+            {
+                if (Test-Nano)
+                {
+                    $handler = New-Object System.Net.Http.HttpClientHandler
+                    $client = New-Object System.Net.Http.HttpClient($handler)
+                    $client.Timeout = New-Object System.TimeSpan(0, 30, 0)
+                    $cancelTokenSource = [System.Threading.CancellationTokenSource]::new() 
+                    $responseMsg = $client.GetAsync([System.Uri]::new($currentSourcePath), $cancelTokenSource.Token)
+                    $responseMsg.Wait()
+
+                    if (!$responseMsg.IsCanceled)
+                    {
+                        $response = $responseMsg.Result
+                        if ($response.IsSuccessStatusCode)
+                        {
+                            $downloadedFileStream = [System.IO.FileStream]::new($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+                            $copyStreamOp = $response.Content.CopyToAsync($downloadedFileStream)
+                            $copyStreamOp.Wait()
+                            $downloadedFileStream.Close()
+                            if ($copyStreamOp.Exception -ne $null)
+                            {
+                                throw $copyStreamOp.Exception
+                            }      
+                        }
+                    }  
+                }
+                else
+                {
+                    # Ensure that all secure protocols are enabled (TLS 1.2 is not by default in some cases).
+                    $secureProtocols = @()
+                    $insecureProtocols = @([System.Net.SecurityProtocolType]::SystemDefault, [System.Net.SecurityProtocolType]::Ssl3)
+
+                    foreach ($protocol in [System.Enum]::GetValues([System.Net.SecurityProtocolType]))
+                    {
+                        if ($insecureProtocols -notcontains $protocol)
+                        {
+                            $secureProtocols += $protocol
+                        }
+                    }
+
+                    [System.Net.ServicePointManager]::SecurityProtocol = $secureProtocols
+
+                    if ($PSVersionTable.PSVersion.Major -ge 5)
+                    {
+                        #
+                        # We disable progress display because it kills performance for large downloads (at least on 64-bit PowerShell)
+                        #
+                        $ProgressPreference = 'SilentlyContinue'
+                        Invoke-WebRequest -Uri $currentSourcePath -OutFile $DestinationPath -UseBasicParsing
+                        $ProgressPreference = 'Continue'
+                    }
+                    else
+                    {
+                        $webClient = New-Object System.Net.WebClient
+                        $webClient.DownloadFile($currentSourcePath, $DestinationPath)
+                    }
+                }
+            }
+            else
+            {
+                throw "Cannot copy from $currentSourcePath"
+            }
+
+            # If we get here, we've successfuly copied a file.
+            return
+        }
+        catch
+        {
+            $innerException = $_
+        }
     }
+
+    throw $innerException
 }
 
 
@@ -511,8 +543,7 @@ Test-Nano()
 {
     $EditionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID').EditionId
 
-    return (($EditionId -eq "ServerStandardNano") -or 
-            ($EditionId -eq "ServerDataCenterNano") -or 
+    return (($EditionId -eq "ServerDataCenterNano") -or 
             ($EditionId -eq "NanoServer") -or 
             ($EditionId -eq "ServerTuva"))
 }
@@ -521,7 +552,7 @@ Test-Nano()
 function 
 Wait-Network()
 {
-    $connectedAdapter = Get-NetAdapter |? ConnectorPresent
+    $connectedAdapter = Get-NetAdapter |Where-Object ConnectorPresent
 
     if ($connectedAdapter -eq $null)
     {
@@ -533,7 +564,7 @@ Wait-Network()
 
     while ($($timeElapsed).TotalMinutes -lt 5)
     {
-        $readyNetAdapter = $connectedAdapter |? Status -eq 'Up'
+        $readyNetAdapter = $connectedAdapter |Where-Object Status -eq 'Up'
 
         if ($readyNetAdapter -ne $null)
         {
@@ -555,90 +586,38 @@ Install-Docker()
 {
     [CmdletBinding()]
     param(
-        [string]
+        [string[]]
         [ValidateNotNullOrEmpty()]
-        $DockerPath = "default",
+        $DockerPath = @("https://master.mobyproject.org/windows/x86_64/docker.exe", "https://master.dockerproject.org/windows/x86_64/docker.exe"),
 
-        [string]
+        [string[]]
         [ValidateNotNullOrEmpty()]
-        $DockerDPath = "default",
+        $DockerDPath = @("https://master.mobyproject.org/windows/x86_64/dockerd.exe", "https://master.dockerproject.org/windows/x86_64/dockerd.exe"),
                 
         [string]
         [ValidateNotNullOrEmpty()]
-        $NATSubnet,
-
-        [switch]
-        $SkipDefaultHost,
-
-        [string]
-        $ContainerBaseImage
+        $NATSubnet
     )
 
     Test-Admin
 
-    #If one of these are set to default then the whole .zip needs to be downloaded anyways.
-    Write-Output "DOCKER $DockerPath"
-    if ($DockerPath -eq "default" -or $DockerDPath -eq "default") {
-        Write-Output "Checking Docker versions"
-        #Get the list of .zip packages available from docker.
-        $availableVersions = ((Invoke-WebRequest -Uri $DefaultDockerLocation -UseBasicParsing).Links | Where-Object {$_.href -like "docker*"}).href | Sort-Object -Descending
-        
-        #Parse the versions from the file names
-        $availableVersions = ($availableVersions | Select-String -Pattern "docker-(\d+\.\d+\.\d+).+"  -AllMatches | Select-Object -Expand Matches | %{ $_.Groups[1].Value })
-        $version = $availableVersions[0]
-
-        if($DockerVersion -ne "latest") {
-            $version = $DockerVersion
-            if(!($availableVersions | Select-String $DockerVersion)) {
-                Write-Error "Docker version supplied $DockerVersion was invalid, please choose from the list of available versions: $availableVersions"
-                throw "Invalid docker version supplied."
-            }
-        }
-
-        $zipUrl = $global:DefaultDockerLocation + "docker-$version.zip"
-        $destinationFolder = "$env:UserProfile\DockerDownloads"
-
-        if(!(Test-Path "$destinationFolder")) {
-            md -Path $destinationFolder | Out-Null
-        } elseif(Test-Path "$destinationFolder\docker-$version") {
-            Remove-Item -Recurse -Force "$destinationFolder\docker-$version"
-        }
-
-        Write-Output "Downloading $zipUrl to $destinationFolder\docker-$version.zip"
-        Copy-File -SourcePath $zipUrl -DestinationPath "$destinationFolder\docker-$version.zip"
-
-        #Prevent issues with CLI non-interactive execution on Window Server 2019
-        $global:ProgressPreference = "SilentlyContinue"
-        Expand-Archive -Path "$destinationFolder\docker-$version.zip" -DestinationPath "$destinationFolder\docker-$version"
-        $global:ProgressPreference = "Continue"
-        
-        if($DockerPath -eq "default") {
-            $DockerPath = "$destinationFolder\docker-$version\docker\docker.exe"
-        }
-        if($DockerDPath -eq "default") {
-            $DockerDPath = "$destinationFolder\docker-$version\docker\dockerd.exe"
-        }
-    }
-
-    Write-Output "Installing Docker... $DockerPath"
+    Write-Output "Installing Docker..."
     Copy-File -SourcePath $DockerPath -DestinationPath $env:windir\System32\docker.exe
         
-    Write-Output "Installing Docker daemon... $DockerDPath"
+    Write-Output "Installing Docker daemon..."
     Copy-File -SourcePath $DockerDPath -DestinationPath $env:windir\System32\dockerd.exe
     
     $dockerConfigPath = Join-Path $global:DockerDataPath "config"
     
     if (!(Test-Path $dockerConfigPath))
     {
-        md -Path $dockerConfigPath | Out-Null
+        mkdir -Path $dockerConfigPath | Out-Null
     }
 
     #
     # Register the docker service.
     # Configuration options should be placed at %programdata%\docker\config\daemon.json
     #
-    Write-Output "Configuring the docker service..."
-
     $daemonSettings = New-Object PSObject
         
     $certsPath = Join-Path $global:DockerDataPath "certs.d"
@@ -651,7 +630,7 @@ Install-Docker()
         $daemonSettings | Add-Member NoteProperty tlscert (Join-Path $certsPath "server-cert.pem")
         $daemonSettings | Add-Member NoteProperty tlskey (Join-Path $certsPath "server-key.pem")
     }
-    elseif (!$SkipDefaultHost.IsPresent)
+    else
     {
         # Default local host
         $daemonSettings | Add-Member NoteProperty hosts @("npipe://")
@@ -675,17 +654,37 @@ Install-Docker()
     #
     Wait-Docker
 
-    if(-not [string]::IsNullOrEmpty($ContainerBaseImage)) {
-        Write-Output "Attempting to pull specified base image: $ContainerBaseImage"
-        docker pull $ContainerBaseImage
-    }
-
     Write-Output "The following images are present on this machine:"
     
     docker images -a | Write-Output
 
     Write-Output ""
 }
+
+
+function
+Install-NuGetPackageProvider()
+{
+    $source = Get-PackageProvider -Name NuGet -Force -ErrorAction SilentlyContinue
+    if ($source -eq $null)
+    {
+        Write-Output "Installing dependent package provider 'NuGet'."
+        Install-PackageProvider -Name NuGet -Force | Out-Null
+    }
+}
+
+
+function
+Install-DockerPowerShell()
+{
+    Install-NuGetPackageProvider
+
+    mkdir "$env:temp\dockerpkg" -Force -ErrorAction SilentlyContinue
+    Invoke-WebRequest https://github.com/Microsoft/Docker-PowerShell/releases/download/v0.1.0/Docker.0.1.0.nupkg -OutFile "$env:temp\dockerpkg\docker.nupkg"
+    Find-Package docker -source "$env:temp\dockerpkg\" | Install-Package -Destination "$Env:ProgramFiles\WindowsPowerShell\Modules\"
+    Move-Item -Force "C:\Program Files\WindowsPowerShell\Modules\Docker.0.1.0\" "C:\Program Files\WindowsPowerShell\Modules\Docker"
+}
+
 
 function 
 Start-Docker()
