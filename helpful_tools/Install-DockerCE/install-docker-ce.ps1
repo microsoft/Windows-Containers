@@ -376,12 +376,23 @@ Install-ContainerHost
     #
     # Install, register, and start Docker
     #
-    if (Test-Docker)
+    if (Test-Docker-Version)
     {
-        Write-Output "Docker is already installed."
+        Write-Output "Docker is already installed with specific version."
     }
     else
     {
+        if (Test-Docker)
+        {
+            #Stop all containers
+            docker stop $(docker ps -aq)
+
+            #Halt the docker service
+            Stop-Service -Name docker
+
+            #Unregister the docker service
+            dockerd --unregister-service
+        }
         if ($NATSubnet)
         {
             Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage
@@ -710,6 +721,16 @@ Test-Docker()
 }
 
 
+function
+Test-Docker-Version()
+{
+    $version = & docker version --format "{{.Server.Version}}"
+    Write-Host "Installed version:" $version
+    Write-Host "Target version:" $DockerVersion
+    return ($version -eq $DockerVersion)
+}
+
+
 function 
 Wait-Docker()
 {
@@ -754,3 +775,4 @@ catch
 {
     Write-Error $_
 }
+
