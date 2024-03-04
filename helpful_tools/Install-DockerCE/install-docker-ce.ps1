@@ -260,7 +260,17 @@ New-ContainerTransparentNetwork
     }
 
     Write-Output "Creating container network (Transparent)..."
-    New-ContainerNetwork -Name "Transparent" -Mode Transparent -NetworkAdapterName $netAdapter.Name | Out-Null
+    docker network create -d transparent -o com.docker.network.windowsshim.interface="$($netAdapter.Name)" "Transparent"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create transparent network."
+    }
+
+    # Transparent networks are not picked up by docker until after a service restart.
+    if (Test-Docker)
+    {
+        Restart-Service -Name $global:DockerServiceName
+        Wait-Docker
+    }
 }
 
 
@@ -304,7 +314,26 @@ Install-ContainerHost
     if ((Get-ScheduledTask -TaskName $global:BootstrapTask -ErrorAction SilentlyContinue) -ne $null)
     {
         Unregister-ScheduledTask -TaskName $global:BootstrapTask -Confirm:$false
-    }    
+    }
+
+    #
+    # Install, register, and start Docker
+    #
+    if (Test-Docker)
+    {
+        Write-Output "Docker is already installed."
+    }
+    else
+    {
+        if ($NATSubnet)
+        {
+            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage
+        }
+        else
+        {
+            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage
+        }
+    }
 
     #
     # Configure networking
@@ -370,25 +399,6 @@ Install-ContainerHost
                     }
                 }
             }
-        }
-    }
-
-    #
-    # Install, register, and start Docker
-    #
-    if (Test-Docker)
-    {
-        Write-Output "Docker is already installed."
-    }
-    else
-    {
-        if ($NATSubnet)
-        {
-            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage
-        }
-        else
-        {
-            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage
         }
     }
 
