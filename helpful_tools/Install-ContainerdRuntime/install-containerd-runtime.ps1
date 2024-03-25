@@ -241,8 +241,11 @@ New-ContainerTransparentNetwork
     Write-Output "Creating container network (Transparent)..."
     
     # Download and Install powershell module HNS-Network
-    curl.exe -LO https://github.com/microsoft/windows-container-networking/releases/download/v0.3.0/windows-container-networking-cni-amd64-v0.3.0.zip
-    Expand-Archive -Path .\windows-container-networking-cni-amd64-v0.3.0.zip -DestinationPath 'C:\Program Files\containerd\cni\bin\'
+    $containerdPath='C:\Program Files\containerd\cni\bin\'
+    if (-not (Test-Path $containerdPath)){
+        curl.exe -LO https://github.com/microsoft/windows-container-networking/releases/download/v0.3.0/windows-container-networking-cni-amd64-v0.3.0.zip
+        Expand-Archive -Path .\windows-container-networking-cni-amd64-v0.3.0.zip -DestinationPath $containerdPath
+    }
     curl.exe -LO https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/hns.psm1
     Import-Module -Force ./hns.psm1
 
