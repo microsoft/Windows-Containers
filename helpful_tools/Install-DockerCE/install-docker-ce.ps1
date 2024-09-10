@@ -653,6 +653,7 @@ Install-Docker()
         
     Write-Output "Installing Docker daemon... $DockerDPath"
     Copy-File -SourcePath $DockerDPath -DestinationPath $env:windir\System32\dockerd.exe
+    Copy-File -SourcePath $DockerDPath -DestinationPath $env:windir\SysWow64\dockerd.exe
     
     $dockerConfigPath = Join-Path $global:DockerDataPath "config"
     
