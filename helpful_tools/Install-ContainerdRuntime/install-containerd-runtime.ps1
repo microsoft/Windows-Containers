@@ -62,7 +62,7 @@ param(
     $NerdCTLVersion,
 
     [string]
-    $WinCNIVersion = "0.3.0",
+    $WinCNIVersion,
 
     [string]
     $ExternalNetAdapter,
@@ -592,7 +592,7 @@ Install-Containerd()
         $ReleaseAssets = Invoke-RestMethod "https://api.github.com/repos/containerd/nerdctl/releases/latest"
         $Release = ($ReleaseAssets.assets | ? name -Match "Windows.+64.+gz$")
         $URL = $Release.browser_download_url
-        $ContainerdZip = $Release.Name
+        $NerdCTLZip = $Release.Name
     }
     Copy-File $URL "$NerdCTLPath\$NerdCTLZip"
     tar.exe -xvf "$NerdCTLPath\$NerdCTLZip" -C $NerdCTLPath
@@ -600,13 +600,13 @@ Install-Containerd()
 
     #Download and extract cni binaries
     if ($WinCNIVersion) {
-        $NerdCTLZip = "nerdctl-$NerdCTLVersion-windows-amd64.tar.gz"
+        $WinCNIZip = "nerdctl-$NerdCTLVersion-windows-amd64.tar.gz"
         $URL = "https://github.com/microsoft/windows-container-networking/releases/download/v$WinCNIVersion/$WinCNIZip"
     } else {
         $ReleaseAssets = Invoke-RestMethod "https://api.github.com/repos/microsoft/windows-container-networking/releases/latest"
         $Release = ($ReleaseAssets.assets | ? name -Match "Windows.+64.+zip$")
         $URL = $Release.browser_download_url
-        $ContainerdZip = $Release.Name
+        $WinCNIZip = $Release.Name
     }
     Copy-File $URL "$WinCNIPath\$WinCNIZip"
     tar.exe -xvf "$WinCNIPath\$WinCNIZip" -C $WinCNIPath
