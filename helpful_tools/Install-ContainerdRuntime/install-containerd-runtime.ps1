@@ -54,16 +54,14 @@
 
 [CmdletBinding(DefaultParameterSetName="Standard")]
 param(
+    
     [string]
-    [ValidateNotNullOrEmpty()]
-    $ContainerDVersion = "1.6.6",
+    $ContainerDVersion,
 
     [string]
-    [ValidateNotNullOrEmpty()]
-    $NerdCTLVersion = "0.21.0",
+    $NerdCTLVersion,
 
     [string]
-    [ValidateNotNullOrEmpty()]
     $WinCNIVersion = "0.3.0",
 
     [string]
@@ -252,8 +250,10 @@ New-ContainerTransparentNetwork
     # Download and Install powershell module HNS-Network
     $containerdPath='C:\Program Files\containerd\cni\bin\'
     if (-not (Test-Path $containerdPath)){
-        curl.exe -LO https://github.com/microsoft/windows-container-networking/releases/download/v0.3.0/windows-container-networking-cni-amd64-v0.3.0.zip
-        Expand-Archive -Path .\windows-container-networking-cni-amd64-v0.3.0.zip -DestinationPath $containerdPath
+        $ReleaseAssets = Invoke-RestMethod "https://api.github.com/repos/microsoft/windows-container-networking/releases/latest"
+        $url        = ($ReleaseAssets.assets | ? name -Match "64.+zip$")
+        curl.exe -LO $url.browser_download_url
+        Expand-Archive -Path .\$($url.name) -DestinationPath $containerdPath
     }
     curl.exe -LO https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/hns.psm1
     Import-Module -Force ./hns.psm1
@@ -545,16 +545,13 @@ Install-Containerd()
     [CmdletBinding()]
     param(
         [string]
-        [ValidateNotNullOrEmpty()]
-        $ContainerdVersion = "1.6.6",
+        $ContainerdVersion,
 
         [string]
-        [ValidateNotNullOrEmpty()]
-        $NerdCTLVersion = "0.21.0",
+        $NerdCTLVersion,
 
         [string]
-        [ValidateNotNullOrEmpty()]
-        $WinCNIVersion = "0.3.0",
+        $WinCNIVersion,
 
         [string]
         $ContainerBaseImage
@@ -573,20 +570,45 @@ Install-Containerd()
     if (!(Test-Path $NerdCTLPath)) { mkdir -Force -Path $NerdCTLPath | Out-Null }
     if (!(Test-Path $WinCNIPath)) { mkdir -Force -Path $WinCNIPath | Out-Null }
 
-    $ContainerdZip = "containerd-$ContainerDVersion-windows-amd64.tar.gz"
-    Copy-File "https://github.com/containerd/containerd/releases/download/v$ContainerDVersion/$ContainerdZip" "$ContainerdPath\$ContainerdZip"
+
+    if ($ContainerdVersion) {
+        $ContainerdZip = "containerd-$ContainerDVersion-windows-amd64.tar.gz"
+        $URL = "https://github.com/containerd/containerd/releases/download/v$ContainerDVersion/$ContainerdZip"
+    } else {
+        $ReleaseAssets = Invoke-RestMethod "https://api.github.com/repos/containerd/containerd/releases/latest"
+        $Release = ($ReleaseAssets.assets | ? name -Match "Windows.+64.+gz$")
+        $URL = $Release.browser_download_url
+        $ContainerdZip = $Release.Name
+    }
+    Copy-File $URL "$ContainerdPath\$ContainerdZip"
     tar.exe -xvf "$ContainerdPath\$ContainerdZip" -C $ContainerdPath
     Write-Output "Containerd binaries added to $ContainerdPath"
 
     #Download and extract nerdctl binaries
-    $NerdCTLZip = "nerdctl-$NerdCTLVersion-windows-amd64.tar.gz"
-    Copy-File "https://github.com/containerd/nerdctl/releases/download/v$NerdCTLVersion/$NerdCTLZip" "$NerdCTLPath\$NerdCTLZip"
+    if ($NerdCTLVersion) {
+        $NerdCTLZip = "nerdctl-$NerdCTLVersion-windows-amd64.tar.gz"
+        $URL = "https://github.com/containerd/nerdctl/releases/download/v$NerdCTLVersion/$NerdCTLZip"
+    } else {
+        $ReleaseAssets = Invoke-RestMethod "https://api.github.com/repos/containerd/nerdctl/releases/latest"
+        $Release = ($ReleaseAssets.assets | ? name -Match "Windows.+64.+gz$")
+        $URL = $Release.browser_download_url
+        $ContainerdZip = $Release.Name
+    }
+    Copy-File $URL "$NerdCTLPath\$NerdCTLZip"
     tar.exe -xvf "$NerdCTLPath\$NerdCTLZip" -C $NerdCTLPath
     Write-Output "NerdCTL binary added to $NerdCTLPath"
 
-    #Download and extract win cni binaries
-    $WinCNIZip = "windows-container-networking-cni-amd64-v$WinCNIVersion.zip"
-    Copy-File "https://github.com/microsoft/windows-container-networking/releases/download/v$WinCNIVersion/$WinCNIZip" "$WinCNIPath\$WinCNIZip"
+    #Download and extract cni binaries
+    if ($WinCNIVersion) {
+        $NerdCTLZip = "nerdctl-$NerdCTLVersion-windows-amd64.tar.gz"
+        $URL = "https://github.com/microsoft/windows-container-networking/releases/download/v$WinCNIVersion/$WinCNIZip"
+    } else {
+        $ReleaseAssets = Invoke-RestMethod "https://api.github.com/repos/microsoft/windows-container-networking/releases/latest"
+        $Release = ($ReleaseAssets.assets | ? name -Match "Windows.+64.+zip$")
+        $URL = $Release.browser_download_url
+        $ContainerdZip = $Release.Name
+    }
+    Copy-File $URL "$WinCNIPath\$WinCNIZip"
     tar.exe -xvf "$WinCNIPath\$WinCNIZip" -C $WinCNIPath
     Write-Output "CNI plugin binaries added to $WinCNIPath"
 
