@@ -600,7 +600,7 @@ Install-Containerd()
 
     #Download and extract cni binaries
     if ($WinCNIVersion) {
-        $WinCNIZip = "nerdctl-$NerdCTLVersion-windows-amd64.tar.gz"
+        $WinCNIZip = "windows-container-networking-cni-amd64-v$WinCNIVersion.zip"
         $URL = "https://github.com/microsoft/windows-container-networking/releases/download/v$WinCNIVersion/$WinCNIZip"
     } else {
         $ReleaseAssets = Invoke-RestMethod "https://api.github.com/repos/microsoft/windows-container-networking/releases/latest"
