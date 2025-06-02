@@ -59,6 +59,9 @@
     .PARAMETER TarPath
         Path to the .tar that is the base image to load into Docker.
 
+    .PARAMETER Update
+        If passed, allows updating an existing Docker installation while preserving daemon.json configuration.
+
     .EXAMPLE
         .\install-docker-ce.ps1
 
@@ -110,7 +113,10 @@ param(
 
     [string]
     [ValidateNotNullOrEmpty()]
-    $TarPath
+    $TarPath,
+
+    [switch]
+    $Update
 )
 
 $global:RebootRequired = $false
@@ -330,7 +336,73 @@ Install-ContainerHost
     #
     if (Test-Docker)
     {
-        Write-Output "Docker is already installed."
+        if ($Update)
+        {
+            Write-Output "Docker is already installed. Updating Docker..."
+            
+            # Backup existing configuration
+            $configBackedUp = Backup-DockerConfig
+            
+            # Stop and remove existing Docker service for update
+            Write-Output "Stopping Docker service for update..."
+            try { Stop-Docker } catch { Write-Output "Docker service was not running" }
+            
+            Write-Output "Unregistering Docker service for update..."
+            try 
+            {
+                & dockerd --unregister-service --service-name $global:DockerServiceName
+                if ($LASTEXITCODE -ne 0) 
+                {
+                    Write-Warning "Failed to unregister Docker service (exit code: $LASTEXITCODE). Proceeding with update..."
+                }
+            }
+            catch 
+            {
+                Write-Warning "Error unregistering Docker service: $($_.Exception.Message). Proceeding with update..."
+            }
+            
+            # Install updated Docker version
+            try
+            {
+                if ($NATSubnet)
+                {
+                    Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage -Update
+                }
+                else
+                {
+                    Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage -Update
+                }
+            }
+            catch
+            {
+                Write-Error "Failed to install Docker update: $($_.Exception.Message)"
+                
+                # Attempt to restore configuration if backup exists
+                if ($configBackedUp)
+                {
+                    Write-Output "Attempting to restore configuration after failed update..."
+                    Restore-DockerConfig
+                }
+                throw
+            }
+            
+            # The Install-Docker function already starts Docker with preserved config
+            # Additional restore is not needed unless Install-Docker failed to preserve config
+            if ($configBackedUp)
+            {
+                # Clean up backup file since configuration was preserved during install
+                $dockerConfigPath = Join-Path $global:DockerDataPath "config"
+                $backupFile = Join-Path $dockerConfigPath "daemon.json.backup"
+                if (Test-Path $backupFile)
+                {
+                    Remove-Item -Path $backupFile -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        else
+        {
+            Write-Output "Docker is already installed."
+        }
     }
     else
     {
@@ -570,6 +642,73 @@ Wait-Network()
 
 
 function 
+Backup-DockerConfig()
+{
+    $dockerConfigPath = Join-Path $global:DockerDataPath "config"
+    $daemonSettingsFile = Join-Path $dockerConfigPath "daemon.json"
+    $backupFile = "$daemonSettingsFile.backup"
+    
+    if (Test-Path $daemonSettingsFile)
+    {
+        Write-Output "Backing up existing Docker daemon configuration..."
+        try
+        {
+            # Validate that the daemon.json file is readable and appears to be valid JSON
+            $configContent = Get-Content -Path $daemonSettingsFile -Raw -ErrorAction Stop
+            if ($configContent -and $configContent.Trim().StartsWith('{'))
+            {
+                Copy-Item -Path $daemonSettingsFile -Destination $backupFile -Force -ErrorAction Stop
+                Write-Output "Docker configuration backed up successfully."
+                return $true
+            }
+            else
+            {
+                Write-Warning "Existing daemon.json appears to be empty or invalid. Skipping backup."
+                return $false
+            }
+        }
+        catch
+        {
+            Write-Warning "Failed to backup Docker configuration: $($_.Exception.Message)"
+            return $false
+        }
+    }
+    
+    Write-Output "No existing Docker daemon configuration found to backup."
+    return $false
+}
+
+
+function 
+Restore-DockerConfig()
+{
+    $dockerConfigPath = Join-Path $global:DockerDataPath "config"
+    $daemonSettingsFile = Join-Path $dockerConfigPath "daemon.json"
+    $backupFile = "$daemonSettingsFile.backup"
+    
+    if (Test-Path $backupFile)
+    {
+        Write-Output "Restoring Docker daemon configuration..."
+        try
+        {
+            Copy-Item -Path $backupFile -Destination $daemonSettingsFile -Force -ErrorAction Stop
+            Remove-Item -Path $backupFile -Force -ErrorAction Stop
+            Write-Output "Docker configuration restored successfully."
+            return $true
+        }
+        catch
+        {
+            Write-Warning "Failed to restore Docker configuration: $($_.Exception.Message)"
+            return $false
+        }
+    }
+    
+    Write-Output "No backup configuration found to restore."
+    return $false
+}
+
+
+function 
 Install-Docker()
 {
     [CmdletBinding()]
@@ -590,7 +729,10 @@ Install-Docker()
         $SkipDefaultHost,
 
         [string]
-        $ContainerBaseImage
+        $ContainerBaseImage,
+
+        [switch]
+        $Update
     )
 
     Test-Admin
@@ -682,8 +824,18 @@ Install-Docker()
     }
 
     $daemonSettingsFile = Join-Path $dockerConfigPath "daemon.json"
-
-    $daemonSettings | ConvertTo-Json | Out-File -FilePath $daemonSettingsFile -Encoding ASCII
+    
+    # Handle daemon.json configuration
+    if ($Update -and (Test-Path $daemonSettingsFile))
+    {
+        Write-Output "Update mode: preserving existing daemon.json configuration"
+        # In update mode, keep the existing daemon.json file
+    }
+    else
+    {
+        # Create new daemon.json configuration (fresh install or no existing config)
+        $daemonSettings | ConvertTo-Json | Out-File -FilePath $daemonSettingsFile -Encoding ASCII
+    }
     
     & dockerd --register-service --service-name $global:DockerServiceName
 

@@ -9,7 +9,7 @@
 #### SYNTAX
     install-docker-ce.ps1 [-DockerPath <String>] [-DockerDPath <String>] [-DockerVersion <String>] [-ContainerBaseImage <String>] [-ExternalNetAdapter <String>] 
     [-Force] [-HyperV] [-SkipDefaultHost] [-NATSubnet <String>] [-NoRestart] [-PSDirect] [-Staging] 
-    [-UseDHCP] [-WimPath <String>] [-TarPath] [<CommonParameters>]
+    [-UseDHCP] [-WimPath <String>] [-TarPath] [-Update] [<CommonParameters>]
     
     
 #### DESCRIPTION
@@ -131,6 +131,15 @@
         Default value                
         Accept pipeline input?       false
         Accept wildcard characters?  false
+
+    -Update [<SwitchParameter>]
+        If passed, allows updating an existing Docker installation while preserving daemon.json configuration.
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
         
 #### NOTES
         Copyright (c) Microsoft Corporation.  All rights reserved.
@@ -146,6 +155,9 @@
 #### Examples
     
     PS C:\>.\install-docker-ce.ps1
+    
+    PS C:\>.\install-docker-ce.ps1 -Update
+    Updates an existing Docker installation while preserving daemon.json configuration
     
 #### Prerequisites
 Requires PowerShell version 5.0
