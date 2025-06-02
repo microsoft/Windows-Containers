@@ -348,27 +348,55 @@ Install-ContainerHost
             try { Stop-Docker } catch { Write-Output "Docker service was not running" }
             
             Write-Output "Unregistering Docker service for update..."
-            & dockerd --unregister-service --service-name $global:DockerServiceName
+            try 
+            {
+                & dockerd --unregister-service --service-name $global:DockerServiceName
+                if ($LASTEXITCODE -ne 0) 
+                {
+                    Write-Warning "Failed to unregister Docker service (exit code: $LASTEXITCODE). Proceeding with update..."
+                }
+            }
+            catch 
+            {
+                Write-Warning "Error unregistering Docker service: $($_.Exception.Message). Proceeding with update..."
+            }
             
             # Install updated Docker version
-            if ($NATSubnet)
+            try
             {
-                Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage -Update
+                if ($NATSubnet)
+                {
+                    Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage -Update
+                }
+                else
+                {
+                    Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage -Update
+                }
             }
-            else
+            catch
             {
-                Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage -Update
+                Write-Error "Failed to install Docker update: $($_.Exception.Message)"
+                
+                # Attempt to restore configuration if backup exists
+                if ($configBackedUp)
+                {
+                    Write-Output "Attempting to restore configuration after failed update..."
+                    Restore-DockerConfig
+                }
+                throw
             }
             
-            # Restore configuration if it was backed up
+            # The Install-Docker function already starts Docker with preserved config
+            # Additional restore is not needed unless Install-Docker failed to preserve config
             if ($configBackedUp)
             {
-                Write-Output "Stopping Docker to restore configuration..."
-                Stop-Docker
-                Restore-DockerConfig
-                Write-Output "Starting Docker with restored configuration..."
-                Start-Docker
-                Wait-Docker
+                # Clean up backup file since configuration was preserved during install
+                $dockerConfigPath = Join-Path $global:DockerDataPath "config"
+                $backupFile = Join-Path $dockerConfigPath "daemon.json.backup"
+                if (Test-Path $backupFile)
+                {
+                    Remove-Item -Path $backupFile -Force -ErrorAction SilentlyContinue
+                }
             }
         }
         else
@@ -623,10 +651,30 @@ Backup-DockerConfig()
     if (Test-Path $daemonSettingsFile)
     {
         Write-Output "Backing up existing Docker daemon configuration..."
-        Copy-Item -Path $daemonSettingsFile -Destination $backupFile -Force
-        return $true
+        try
+        {
+            # Validate that the daemon.json file is readable and appears to be valid JSON
+            $configContent = Get-Content -Path $daemonSettingsFile -Raw -ErrorAction Stop
+            if ($configContent -and $configContent.Trim().StartsWith('{'))
+            {
+                Copy-Item -Path $daemonSettingsFile -Destination $backupFile -Force -ErrorAction Stop
+                Write-Output "Docker configuration backed up successfully."
+                return $true
+            }
+            else
+            {
+                Write-Warning "Existing daemon.json appears to be empty or invalid. Skipping backup."
+                return $false
+            }
+        }
+        catch
+        {
+            Write-Warning "Failed to backup Docker configuration: $($_.Exception.Message)"
+            return $false
+        }
     }
     
+    Write-Output "No existing Docker daemon configuration found to backup."
     return $false
 }
 
@@ -641,11 +689,21 @@ Restore-DockerConfig()
     if (Test-Path $backupFile)
     {
         Write-Output "Restoring Docker daemon configuration..."
-        Copy-Item -Path $backupFile -Destination $daemonSettingsFile -Force
-        Remove-Item -Path $backupFile -Force
-        return $true
+        try
+        {
+            Copy-Item -Path $backupFile -Destination $daemonSettingsFile -Force -ErrorAction Stop
+            Remove-Item -Path $backupFile -Force -ErrorAction Stop
+            Write-Output "Docker configuration restored successfully."
+            return $true
+        }
+        catch
+        {
+            Write-Warning "Failed to restore Docker configuration: $($_.Exception.Message)"
+            return $false
+        }
     }
     
+    Write-Output "No backup configuration found to restore."
     return $false
 }
 
