@@ -149,3 +149,92 @@
     
 #### Prerequisites
 Requires PowerShell version 5.0
+
+## uninstall-docker-ce.ps1
+
+#### NAME
+    uninstall-docker-ce.ps1
+    
+#### SYNOPSIS
+    Uninstalls Docker Community Edition and removes related components
+    
+#### SYNTAX
+    uninstall-docker-ce.ps1 [-RemoveImages] [-RemoveNetworks] [-KeepData] [-Force] [-RemoveWindowsFeatures] [<CommonParameters>]
+    
+#### DESCRIPTION
+    Uninstalls Docker Community Edition from Windows, including the service,
+    binaries, configuration, and optionally images and networks.
+
+#### PARAMETERS
+    -RemoveImages [<SwitchParameter>]
+        If specified, removes all Docker images before uninstalling
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -RemoveNetworks [<SwitchParameter>]
+        If specified, removes all custom Docker networks before uninstalling
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -KeepData [<SwitchParameter>]
+        If specified, preserves Docker data directory (images, containers, volumes)
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -Force [<SwitchParameter>]
+        If specified, skips confirmation prompts and forces removal
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -RemoveWindowsFeatures [<SwitchParameter>]
+        If specified, removes Windows Container and Hyper-V features (use with caution)
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+        
+#### NOTES
+        Copyright (c) Microsoft Corporation.  All rights reserved.
+        
+        Use of this sample source code is subject to the terms of the Microsoft
+        license agreement under which you licensed this sample source code. If
+        you did not accept the terms of the license agreement, you are not
+        authorized to use this sample source code. For the terms of the license,
+        please see the license agreement between you and Microsoft or, if applicable,
+        see the LICENSE.RTF on your install media or the root of your tools installation.
+        THE SAMPLE SOURCE CODE IS PROVIDED "AS IS", WITH NO WARRANTIES.
+    
+#### Examples
+    
+    PS C:\>.\uninstall-docker-ce.ps1
+    Basic uninstall (removes service, binaries, data but preserves images)
+    
+    PS C:\>.\uninstall-docker-ce.ps1 -RemoveImages -RemoveNetworks
+    Complete uninstall including all images and custom networks
+    
+    PS C:\>.\uninstall-docker-ce.ps1 -Force -RemoveImages
+    Forced uninstall without confirmation prompts
+    
+    PS C:\>.\uninstall-docker-ce.ps1 -KeepData
+    Uninstall but preserve Docker data directory
+    
+#### Prerequisites
+Requires PowerShell version 5.0 and Administrator privileges

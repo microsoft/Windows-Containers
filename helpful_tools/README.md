@@ -10,6 +10,7 @@ A container runtime is software that executes containers and manages container i
 - It includes additional features such as Docker Compose for managing multi-container applications.
 - Use Docker CE when you need a comprehensive solution for developing and managing multi-container applications.
 #### [👉 Install Docker CE with PowerShell](https://github.com/microsoft/Windows-Containers/tree/Main/helpful_tools/Install-DockerCE)
+#### [👉 Uninstall Docker CE with PowerShell](https://github.com/microsoft/Windows-Containers/tree/Main/helpful_tools/Install-DockerCE)
 
 ### 2. ContainerD
 - Lightweight, standalone runtime for containers, designed to be embedded into a larger system.
