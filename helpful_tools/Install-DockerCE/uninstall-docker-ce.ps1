@@ -478,6 +478,10 @@ Remove-DockerRegistryKeys()
         }
     }
 }
+
+function
+Remove-WindowsFeatures()
+{
     if ($RemoveWindowsFeatures)
     {
         Write-Output "WARNING: Removing Windows features may affect other software on this system."
