@@ -149,3 +149,85 @@
     
 #### Prerequisites
 Requires PowerShell version 5.0
+
+
+## uninstall-docker-ce.ps1
+
+#### NAME
+    uninstall-docker-ce.ps1
+    
+#### SYNOPSIS
+    Uninstalls Docker Community Edition and cleans up associated components
+    
+#### SYNTAX
+    uninstall-docker-ce.ps1 [-Force] [-RemoveWindowsFeatures] [-KeepData] [-WhatIf] [<CommonParameters>]
+    
+#### DESCRIPTION
+    Uninstalls Docker Community Edition, stops and removes the Docker service,
+    removes Docker binaries, cleans up Docker data directory, and removes Docker networks.
+    Optionally removes Windows features if they are no longer needed.
+
+#### PARAMETERS
+    -Force [<SwitchParameter>]
+        If specified, bypasses user confirmation prompts and proceeds with uninstallation automatically.
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+        
+    -RemoveWindowsFeatures [<SwitchParameter>]
+        If specified, removes the Windows Container feature. Use with caution as this may affect other container runtimes.
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+        
+    -KeepData [<SwitchParameter>]
+        If specified, preserves the Docker data directory and configuration files.
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+        
+    -WhatIf [<SwitchParameter>]
+        Shows what would be done without actually performing the uninstallation.
+        
+        Required?                    false
+        Position?                    named
+        Default value                False
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+#### EXAMPLES
+    PS C:\>.\uninstall-docker-ce.ps1
+    Prompts for confirmation before each operation
+    
+    PS C:\>.\uninstall-docker-ce.ps1 -Force
+    Bypasses all confirmation prompts and proceeds with uninstallation
+    
+    PS C:\>.\uninstall-docker-ce.ps1 -Force -RemoveWindowsFeatures
+    Uninstalls Docker and removes Windows Container features without prompts
+    
+    PS C:\>.\uninstall-docker-ce.ps1 -WhatIf
+    Shows what would be uninstalled without making any changes
+
+#### NOTES
+    Copyright (c) Microsoft Corporation.  All rights reserved.
+    
+    Use of this sample source code is subject to the terms of the Microsoft
+    license agreement under which you licensed this sample source code. If
+    you did not accept the terms of the license agreement, you are not
+    authorized to use this sample source code. For the terms of the license,
+    please see the license agreement between you and Microsoft or, if applicable,
+    see the LICENSE.RTF on your install media or the root of your tools installation.
+    THE SAMPLE SOURCE CODE IS PROVIDED "AS IS", WITH NO WARRANTIES.
+
+#### Prerequisites
+Requires PowerShell version 5.0
+Requires Administrator privileges
