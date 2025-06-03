@@ -136,12 +136,15 @@ Remove-DockerService()
             # Stop the service first
             Stop-Docker
             
-            # Remove the service
-            $service = Get-WmiObject -Class Win32_Service -Filter "Name='$global:DockerServiceName'"
-            if ($service)
+            # Remove the service using sc.exe for more reliable deletion
+            $result = & sc.exe delete $global:DockerServiceName 2>&1
+            if ($LASTEXITCODE -eq 0)
             {
-                $service.delete()
                 Write-Output "Docker service removed successfully."
+            }
+            else
+            {
+                Write-Warning "Failed to remove Docker service. Exit code: $LASTEXITCODE. Output: $result"
             }
         }
         catch
@@ -268,12 +271,22 @@ Remove-DockerData()
             Write-Output "Removing Docker data directory..."
             try
             {
+                # Take ownership of the Docker data directory and its contents
+                # This is needed for directories like windowsfilter which have restrictive ACLs
+                Write-Output "Taking ownership of Docker data directory..."
+                & takeown.exe /f $global:DockerDataPath /r /d y 2>$null | Out-Null
+                
+                # Grant full control to the current user
+                & icacls.exe $global:DockerDataPath /grant "$env:USERNAME`:F" /t /c 2>$null | Out-Null
+                
+                # Now attempt to remove the directory
                 Remove-Item $global:DockerDataPath -Recurse -Force
                 Write-Output "Docker data directory removed."
             }
             catch
             {
                 Write-Warning "Failed to remove Docker data directory: $_"
+                Write-Warning "You may need to manually remove $global:DockerDataPath"
             }
         }
         else
