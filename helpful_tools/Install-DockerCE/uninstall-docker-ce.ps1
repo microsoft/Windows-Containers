@@ -108,15 +108,27 @@ Stop-Docker()
 {
     if (Test-Docker)
     {
-        Write-Output "Stopping Docker service..."
-        try
+        $service = Get-Service -Name $global:DockerServiceName -ErrorAction SilentlyContinue
+        if ($service.Status -eq 'Running')
         {
-            Stop-Service -Name $global:DockerServiceName -Force -ErrorAction Stop
-            Write-Output "Docker service stopped successfully."
+            Write-Output "Stopping Docker service..."
+            try
+            {
+                Stop-Service -Name $global:DockerServiceName -Force -ErrorAction Stop
+                Write-Output "Docker service stopped successfully."
+            }
+            catch
+            {
+                Write-Warning "Failed to stop Docker service: $_"
+            }
         }
-        catch
+        elseif ($service.Status -eq 'Stopped')
         {
-            Write-Warning "Failed to stop Docker service: $_"
+            Write-Output "Docker service is already stopped."
+        }
+        else
+        {
+            Write-Output "Docker service is in '$($service.Status)' state."
         }
     }
     else
@@ -202,16 +214,112 @@ Remove-DockerBinaries()
 }
 
 function
+Remove-DockerContainers()
+{
+    Write-Output "Checking for existing Docker containers..."
+    try
+    {
+        $containers = docker ps -aq 2>$null
+        if ($containers)
+        {
+            $containerCount = ($containers | Measure-Object).Count
+            $runningContainers = docker ps -q 2>$null
+            $runningCount = if ($runningContainers) { ($runningContainers | Measure-Object).Count } else { 0 }
+            
+            Write-Output "Found $containerCount Docker container(s) ($runningCount running)."
+            
+            if (-not $Force)
+            {
+                $message = "Do you want to stop and remove all $containerCount Docker container(s)"
+                if ($runningCount -gt 0) { $message += " (including $runningCount running)" }
+                $message += "? (y/N)"
+                
+                $response = Read-Host $message
+                if ($response -ne "y" -and $response -ne "Y")
+                {
+                    Write-Output "Skipping Docker containers removal."
+                    return
+                }
+            }
+            
+            Write-Output "Stopping and removing all Docker containers..."
+            docker stop $containers 2>$null | Out-Null
+            docker rm -f $containers 2>$null
+            Write-Output "Docker containers removed."
+        }
+        else
+        {
+            Write-Output "No Docker containers found."
+        }
+    }
+    catch
+    {
+        Write-Warning "Failed to remove Docker containers: $_"
+    }
+}
+
+function
+Remove-DockerVolumes()
+{
+    Write-Output "Checking for existing Docker volumes..."
+    try
+    {
+        $volumes = docker volume ls -q 2>$null
+        if ($volumes)
+        {
+            $volumeCount = ($volumes | Measure-Object).Count
+            Write-Output "Found $volumeCount Docker volume(s)."
+            
+            if (-not $Force)
+            {
+                $response = Read-Host "Do you want to remove all $volumeCount Docker volume(s)? (y/N)"
+                if ($response -ne "y" -and $response -ne "Y")
+                {
+                    Write-Output "Skipping Docker volumes removal."
+                    return
+                }
+            }
+            
+            Write-Output "Removing all Docker volumes..."
+            docker volume rm -f $volumes 2>$null
+            Write-Output "Docker volumes removed."
+        }
+        else
+        {
+            Write-Output "No Docker volumes found."
+        }
+    }
+    catch
+    {
+        Write-Warning "Failed to remove Docker volumes: $_"
+    }
+}
+
+function
 Remove-DockerImages()
 {
     if ($RemoveImages)
     {
-        Write-Output "Removing all Docker images..."
+        Write-Output "Checking for existing Docker images..."
         try
         {
             $images = docker images -q 2>$null
             if ($images)
             {
+                $imageCount = ($images | Measure-Object).Count
+                Write-Output "Found $imageCount Docker image(s)."
+                
+                if (-not $Force)
+                {
+                    $response = Read-Host "Do you want to remove all $imageCount Docker image(s)? (y/N)"
+                    if ($response -ne "y" -and $response -ne "Y")
+                    {
+                        Write-Output "Skipping Docker images removal."
+                        return
+                    }
+                }
+                
+                Write-Output "Removing all Docker images..."
                 docker rmi -f $images 2>$null
                 Write-Output "Docker images removed."
             }
@@ -274,7 +382,30 @@ Remove-DockerData()
                 # Take ownership of the Docker data directory and its contents
                 # This is needed for directories like windowsfilter which have restrictive ACLs
                 Write-Output "Taking ownership of Docker data directory..."
-                & takeown.exe /f $global:DockerDataPath /r /d y 2>$null | Out-Null
+                
+                # Use Start-Process with timeout to handle hanging takeown operation
+                $takeownProcess = Start-Process -FilePath "takeown.exe" -ArgumentList "/f", $global:DockerDataPath, "/r", "/d", "y" -WindowStyle Hidden -PassThru -RedirectStandardOutput $null -RedirectStandardError $null
+                
+                # Wait for up to 3 minutes for takeown to complete
+                $timeoutMinutes = 3
+                $timeoutMs = $timeoutMinutes * 60 * 1000
+                
+                if (-not $takeownProcess.WaitForExit($timeoutMs))
+                {
+                    # Process is still running after timeout, kill it
+                    Write-Warning "Taking ownership is taking longer than $timeoutMinutes minutes. Terminating process..."
+                    try
+                    {
+                        $takeownProcess.Kill()
+                        $takeownProcess.WaitForExit(5000) # Wait up to 5 seconds for kill to complete
+                    }
+                    catch
+                    {
+                        Write-Warning "Failed to terminate takeown process: $_"
+                    }
+                    Write-Error "Taking ownership of Docker data directory timed out after $timeoutMinutes minutes."
+                    return
+                }
                 
                 # Grant full control to the current user
                 & icacls.exe $global:DockerDataPath /grant "$env:USERNAME`:F" /t /c 2>$null | Out-Null
@@ -317,8 +448,36 @@ Remove-DockerData()
 }
 
 function
-Remove-WindowsFeatures()
+Remove-DockerRegistryKeys()
 {
+    Write-Output "Removing Docker registry keys..."
+    
+    $registryPaths = @(
+        "HKLM:\SYSTEM\CurrentControlSet\Services\docker",
+        "HKLM:\SYSTEM\ControlSet002\Services\docker"
+    )
+    
+    foreach ($regPath in $registryPaths)
+    {
+        try
+        {
+            if (Test-Path $regPath)
+            {
+                Write-Output "Removing registry key: $regPath"
+                Remove-Item $regPath -Recurse -Force
+                Write-Output "Registry key removed: $regPath"
+            }
+            else
+            {
+                Write-Output "Registry key not found: $regPath"
+            }
+        }
+        catch
+        {
+            Write-Warning "Failed to remove registry key $regPath`: $_"
+        }
+    }
+}
     if ($RemoveWindowsFeatures)
     {
         Write-Output "WARNING: Removing Windows features may affect other software on this system."
@@ -419,15 +578,41 @@ Remove-DockerCE()
         }
     }
     
-    # Remove images and networks first (while Docker is still running)
+    # Remove containers, volumes, images and networks first (while Docker is still running or available)
+    # We'll try to clean these up even if the service is stopped, as docker CLI might still work
     if (Test-Docker)
     {
-        Remove-DockerImages
-        Remove-DockerNetworks
+        try 
+        {
+            # Test if docker CLI is available and responsive
+            $null = docker version 2>$null
+            if ($LASTEXITCODE -eq 0)
+            {
+                Remove-DockerContainers
+                Remove-DockerVolumes
+                Remove-DockerImages
+                Remove-DockerNetworks
+            }
+            else
+            {
+                Write-Output "Docker CLI is not responsive. Skipping container/volume/image/network cleanup."
+            }
+        }
+        catch
+        {
+            Write-Output "Docker CLI is not available. Skipping container/volume/image/network cleanup."
+        }
+    }
+    else
+    {
+        Write-Output "Docker service not found. Skipping container/volume/image/network cleanup."
     }
     
     # Stop and remove Docker service
     Remove-DockerService
+    
+    # Remove Docker registry keys
+    Remove-DockerRegistryKeys
     
     # Remove binaries
     Remove-DockerBinaries
