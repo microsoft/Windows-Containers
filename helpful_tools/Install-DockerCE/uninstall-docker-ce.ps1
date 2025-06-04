@@ -375,12 +375,12 @@ Stop-WindowsContainerServices()
     # Stop additional Windows Container services that might be locking files
     $services = @("cexecsvc", "vmcompute", "vmicguestinterface", "vmicheartbeat", "vmickvpexchange", "vmicrdv", "vmicshutdown", "vmictimesync", "vmicvmsession", "vmicvss")
     
+    Write-Output "Stopping additional Windows Container services..."
     foreach ($serviceName in $services)
     {
         $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
         if ($service -and $service.Status -eq 'Running')
         {
-            Write-Output "Stopping $serviceName service..."
             try
             {
                 Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
@@ -675,7 +675,7 @@ Remove-DockerCE()
     
     # Show what will be removed
     Write-Output "The following actions will be performed:"
-    Write-Output "- Stop and remove all Docker containers and volumes"
+    Write-Output "- Stop and remove all Docker containers"
     Write-Output "- Stop and remove Docker service"
     Write-Output "- Remove Docker binaries from System32"
     
