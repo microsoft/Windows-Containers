@@ -237,8 +237,8 @@ Remove-DockerContainers()
                 $response = Read-Host $message
                 if ($response -ne "y" -and $response -ne "Y")
                 {
-                    Write-Output "Skipping Docker containers removal."
-                    return
+                    Write-Output "User chose not to remove containers. Aborting uninstall process."
+                    exit 0
                 }
             }
             
@@ -467,10 +467,7 @@ Remove-DockerRegistryKeys()
                 Remove-Item $regPath -Recurse -Force
                 Write-Output "Registry key removed: $regPath"
             }
-            else
-            {
-                Write-Output "Registry key not found: $regPath"
-            }
+            # Registry key not found - silently continue
         }
         catch
         {
