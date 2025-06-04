@@ -384,7 +384,7 @@ Remove-DockerData()
                 Write-Output "Taking ownership of Docker data directory..."
                 
                 # Use Start-Process with timeout to handle hanging takeown operation
-                $takeownProcess = Start-Process -FilePath "takeown.exe" -ArgumentList "/f", $global:DockerDataPath, "/r", "/d", "y" -WindowStyle Hidden -PassThru -RedirectStandardOutput $null -RedirectStandardError $null
+                $takeownProcess = Start-Process -FilePath "takeown.exe" -ArgumentList "/f", $global:DockerDataPath, "/r", "/d", "y" -WindowStyle Hidden -PassThru
                 
                 # Wait for up to 3 minutes for takeown to complete
                 $timeoutMinutes = 3
@@ -412,7 +412,17 @@ Remove-DockerData()
                 
                 # Now attempt to remove the directory
                 Remove-Item $global:DockerDataPath -Recurse -Force
-                Write-Output "Docker data directory removed."
+                
+                # Sanity check: Verify the Docker folder no longer exists
+                if (Test-Path $global:DockerDataPath)
+                {
+                    Write-Warning "Docker data directory still exists after removal attempt: $global:DockerDataPath"
+                    Write-Warning "You may need to manually remove $global:DockerDataPath"
+                }
+                else
+                {
+                    Write-Output "Docker data directory removed."
+                }
             }
             catch
             {
