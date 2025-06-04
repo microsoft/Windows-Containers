@@ -548,6 +548,7 @@ Remove-DockerCE()
     
     # Show what will be removed
     Write-Output "The following actions will be performed:"
+    Write-Output "- Stop and remove all Docker containers and volumes"
     Write-Output "- Stop and remove Docker service"
     Write-Output "- Remove Docker binaries from System32"
     
