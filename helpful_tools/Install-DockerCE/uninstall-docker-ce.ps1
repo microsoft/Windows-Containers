@@ -370,6 +370,30 @@ Remove-DockerNetworks()
 }
 
 function
+Stop-WindowsContainerServices()
+{
+    # Stop additional Windows Container services that might be locking files
+    $services = @("cexecsvc", "vmcompute", "vmicguestinterface", "vmicheartbeat", "vmickvpexchange", "vmicrdv", "vmicshutdown", "vmictimesync", "vmicvmsession", "vmicvss")
+    
+    foreach ($serviceName in $services)
+    {
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -eq 'Running')
+        {
+            Write-Output "Stopping $serviceName service..."
+            try
+            {
+                Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+            }
+            catch
+            {
+                # Ignore errors for services we can't stop
+            }
+        }
+    }
+}
+
+function
 Remove-DockerData()
 {
     if (-not $KeepData)
@@ -377,8 +401,45 @@ Remove-DockerData()
         if (Test-Path $global:DockerDataPath)
         {
             Write-Output "Removing Docker data directory..."
+            
+            # Stop additional services that might be locking container files
+            Stop-WindowsContainerServices
+            
+            # Wait a moment for services to fully stop
+            Start-Sleep -Seconds 2
+            
             try
             {
+                # Special handling for windowsfilter directory which is often problematic
+                $windowsFilterPath = Join-Path $global:DockerDataPath "windowsfilter"
+                if (Test-Path $windowsFilterPath)
+                {
+                    Write-Output "Removing windowsfilter directory with special handling..."
+                    
+                    # First, try to empty the windowsfilter directory using robocopy purge
+                    # This can sometimes handle locked files better than Remove-Item
+                    $tempEmptyDir = Join-Path $env:TEMP "EmptyDir_$(Get-Random)"
+                    New-Item -ItemType Directory -Path $tempEmptyDir -Force | Out-Null
+                    
+                    try
+                    {
+                        # Use robocopy to mirror an empty directory (effectively purging)
+                        & robocopy.exe $tempEmptyDir $windowsFilterPath /MIR /R:1 /W:1 /NP /NFL /NDL /NJH /NJS 2>$null | Out-Null
+                        Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                    }
+                    catch
+                    {
+                        # If robocopy fails, continue with other methods
+                        Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                    }
+                    
+                    # Try to remove using rd command which can handle some locked files
+                    if (Test-Path $windowsFilterPath)
+                    {
+                        & cmd.exe /c "rd /s /q `"$windowsFilterPath`"" 2>$null | Out-Null
+                    }
+                }
+                
                 # Take ownership of the Docker data directory and its contents
                 # This is needed for directories like windowsfilter which have restrictive ACLs
                 Write-Output "Taking ownership of Docker data directory..."
@@ -403,25 +464,84 @@ Remove-DockerData()
                     {
                         Write-Warning "Failed to terminate takeown process: $_"
                     }
-                    Write-Error "Taking ownership of Docker data directory timed out after $timeoutMinutes minutes."
-                    return
+                    Write-Warning "Taking ownership of Docker data directory timed out after $timeoutMinutes minutes."
+                    # Continue with removal attempt even if takeown timed out
                 }
                 
                 # Grant full control to the current user
                 & icacls.exe $global:DockerDataPath /grant "$env:USERNAME`:F" /t /c 2>$null | Out-Null
                 
-                # Now attempt to remove the directory
-                Remove-Item $global:DockerDataPath -Recurse -Force
+                # Try multiple methods to remove the directory
+                $removalSuccess = $false
                 
-                # Sanity check: Verify the Docker folder no longer exists
+                # Method 1: PowerShell Remove-Item
+                try
+                {
+                    Remove-Item $global:DockerDataPath -Recurse -Force -ErrorAction Stop
+                    $removalSuccess = $true
+                    Write-Output "Docker data directory removed using Remove-Item."
+                }
+                catch
+                {
+                    Write-Warning "Remove-Item failed: $_"
+                }
+                
+                # Method 2: If PowerShell failed, try rd command
+                if (-not $removalSuccess -and (Test-Path $global:DockerDataPath))
+                {
+                    try
+                    {
+                        & cmd.exe /c "rd /s /q `"$global:DockerDataPath`""
+                        if (-not (Test-Path $global:DockerDataPath))
+                        {
+                            $removalSuccess = $true
+                            Write-Output "Docker data directory removed using rd command."
+                        }
+                    }
+                    catch
+                    {
+                        Write-Warning "rd command failed: $_"
+                    }
+                }
+                
+                # Method 3: If still exists, try robocopy purge on the entire directory
+                if (-not $removalSuccess -and (Test-Path $global:DockerDataPath))
+                {
+                    try
+                    {
+                        $tempEmptyDir = Join-Path $env:TEMP "EmptyDir_$(Get-Random)"
+                        New-Item -ItemType Directory -Path $tempEmptyDir -Force | Out-Null
+                        
+                        # Use robocopy to mirror an empty directory over the Docker data directory
+                        & robocopy.exe $tempEmptyDir $global:DockerDataPath /MIR /R:1 /W:1 /NP /NFL /NDL /NJH /NJS 2>$null | Out-Null
+                        
+                        # Then remove the now-empty directory
+                        Remove-Item $global:DockerDataPath -Force -ErrorAction SilentlyContinue
+                        Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                        
+                        if (-not (Test-Path $global:DockerDataPath))
+                        {
+                            $removalSuccess = $true
+                            Write-Output "Docker data directory removed using robocopy purge."
+                        }
+                    }
+                    catch
+                    {
+                        Write-Warning "robocopy purge failed: $_"
+                        Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                    }
+                }
+                
+                # Final sanity check: Verify the Docker folder no longer exists
                 if (Test-Path $global:DockerDataPath)
                 {
-                    Write-Warning "Docker data directory still exists after removal attempt: $global:DockerDataPath"
-                    Write-Warning "You may need to manually remove $global:DockerDataPath"
+                    Write-Warning "Docker data directory still exists after all removal attempts: $global:DockerDataPath"
+                    Write-Warning "The windowsfilter subdirectory may still be in use by Windows Container services."
+                    Write-Warning "You may need to restart your system and manually remove $global:DockerDataPath"
                 }
                 else
                 {
-                    Write-Output "Docker data directory removed."
+                    Write-Output "Docker data directory successfully removed."
                 }
             }
             catch
