@@ -414,29 +414,122 @@ Remove-DockerData()
                 $windowsFilterPath = Join-Path $global:DockerDataPath "windowsfilter"
                 if (Test-Path $windowsFilterPath)
                 {
-                    Write-Output "Removing windowsfilter directory with special handling..."
+                    Write-Output "Removing windowsfilter directory with HCS layer destruction..."
                     
-                    # First, try to empty the windowsfilter directory using robocopy purge
-                    # This can sometimes handle locked files better than Remove-Item
-                    $tempEmptyDir = Join-Path $env:TEMP "EmptyDir_$(Get-Random)"
-                    New-Item -ItemType Directory -Path $tempEmptyDir -Force | Out-Null
-                    
+                    # Use HCS (Host Compute Service) API to properly destroy container layers
+                    # This is more reliable than standard file deletion for windowsfilter
                     try
                     {
-                        # Use robocopy to mirror an empty directory (effectively purging)
-                        & robocopy.exe $tempEmptyDir $windowsFilterPath /MIR /R:1 /W:1 /NP /NFL /NDL /NJH /NJS 2>$null | Out-Null
-                        Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                        # Get all layer directories in windowsfilter
+                        $layerDirs = Get-ChildItem -Path $windowsFilterPath -Directory -ErrorAction SilentlyContinue
+                        
+                        if ($layerDirs)
+                        {
+                            Write-Output "Destroying $($layerDirs.Count) container layer(s) using HCS API..."
+                            
+                            # Load the HCS API and destroy each layer
+                            $job = Start-Job -ScriptBlock {
+                                param($layers)
+                                
+                                # Add the ComputeStorage.dll type definition
+                                try
+                                {
+                                    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public class Hcs 
+{
+    [DllImport("ComputeStorage.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    public static extern int HcsDestroyLayer(string layerPath);
+}
+"@
+                                }
+                                catch
+                                {
+                                    # Type may already be defined, continue
+                                }
+                                
+                                $results = @()
+                                foreach ($layer in $layers)
+                                {
+                                    try
+                                    {
+                                        $result = [Hcs]::HcsDestroyLayer($layer.FullName)
+                                        $results += [PSCustomObject]@{
+                                            Layer = $layer.Name
+                                            Path = $layer.FullName
+                                            Result = $result
+                                            Success = ($result -eq 0)
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        $results += [PSCustomObject]@{
+                                            Layer = $layer.Name
+                                            Path = $layer.FullName
+                                            Result = -1
+                                            Success = $false
+                                            Error = $_.Exception.Message
+                                        }
+                                    }
+                                }
+                                return $results
+                            } -ArgumentList @(,$layerDirs)
+                            
+                            # Wait for the job to complete with a reasonable timeout
+                            $timeout = 120 # 2 minutes
+                            if ($job | Wait-Job -Timeout $timeout)
+                            {
+                                $results = $job | Receive-Job
+                                $job | Remove-Job
+                                
+                                $successCount = ($results | Where-Object { $_.Success }).Count
+                                $failCount = ($results | Where-Object { -not $_.Success }).Count
+                                
+                                Write-Output "HCS layer destruction completed: $successCount successful, $failCount failed"
+                                
+                                if ($failCount -gt 0)
+                                {
+                                    Write-Warning "Some layers could not be destroyed using HCS API. Attempting standard removal..."
+                                }
+                            }
+                            else
+                            {
+                                Write-Warning "HCS layer destruction timed out after $timeout seconds. Stopping job and continuing with standard removal..."
+                                $job | Stop-Job
+                                $job | Remove-Job
+                            }
+                        }
                     }
                     catch
                     {
-                        # If robocopy fails, continue with other methods
-                        Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                        Write-Warning "HCS layer destruction failed: $_. Continuing with standard removal methods..."
                     }
                     
-                    # Try to remove using rd command which can handle some locked files
+                    # After HCS destruction, try standard removal if directory still exists
                     if (Test-Path $windowsFilterPath)
                     {
+                        Write-Output "Attempting standard removal of remaining windowsfilter contents..."
+                        
+                        # Try to remove using rd command which can handle some locked files
                         & cmd.exe /c "rd /s /q `"$windowsFilterPath`"" 2>$null | Out-Null
+                        
+                        # If rd fails, try robocopy purge as fallback
+                        if (Test-Path $windowsFilterPath)
+                        {
+                            $tempEmptyDir = Join-Path $env:TEMP "EmptyDir_$(Get-Random)"
+                            try
+                            {
+                                New-Item -ItemType Directory -Path $tempEmptyDir -Force | Out-Null
+                                & robocopy.exe $tempEmptyDir $windowsFilterPath /MIR /R:1 /W:1 /NP /NFL /NDL /NJH /NJS 2>$null | Out-Null
+                                Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                            }
+                            catch
+                            {
+                                Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                            }
+                        }
                     }
                 }
                 
