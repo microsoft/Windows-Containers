@@ -394,6 +394,89 @@ Stop-WindowsContainerServices()
 }
 
 function
+Test-LingeringContainers()
+{
+    Write-Output "Checking for lingering containers and compute processes..."
+    
+    # Check using hcsdiag list if available
+    try
+    {
+        $hcsdiagOutput = & hcsdiag.exe list 2>$null
+        if ($hcsdiagOutput)
+        {
+            $containerMatches = $hcsdiagOutput | Select-String -Pattern "container" -SimpleMatch
+            if ($containerMatches)
+            {
+                Write-Warning "Found lingering containers via hcsdiag:"
+                $containerMatches | ForEach-Object { Write-Warning "  $_" }
+                
+                # Attempt to clean up these containers
+                Write-Output "Attempting to terminate lingering containers..."
+                $containerMatches | ForEach-Object {
+                    $line = $_.Line
+                    # Extract container ID if possible and attempt cleanup
+                    if ($line -match '\{([^}]+)\}')
+                    {
+                        $containerId = $Matches[1]
+                        try
+                        {
+                            & hcsdiag.exe kill $containerId 2>$null
+                            Write-Output "Terminated container: $containerId"
+                        }
+                        catch
+                        {
+                            Write-Warning "Failed to terminate container $containerId : $_"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    catch
+    {
+        Write-Output "hcsdiag.exe not available or failed: $_"
+    }
+    
+    # Check using Get-ComputeProcess if available
+    try
+    {
+        if (Get-Command Get-ComputeProcess -ErrorAction SilentlyContinue)
+        {
+            $computeProcesses = Get-ComputeProcess -ErrorAction SilentlyContinue
+            if ($computeProcesses)
+            {
+                $containerProcesses = $computeProcesses | Where-Object { $_.Type -like "*container*" }
+                if ($containerProcesses)
+                {
+                    Write-Warning "Found lingering compute processes:"
+                    $containerProcesses | ForEach-Object { 
+                        Write-Warning "  Process: $($_.Id) Type: $($_.Type)" 
+                        
+                        # Attempt to stop the process
+                        try
+                        {
+                            $_ | Stop-ComputeProcess -Force -ErrorAction SilentlyContinue
+                            Write-Output "Stopped compute process: $($_.Id)"
+                        }
+                        catch
+                        {
+                            Write-Warning "Failed to stop compute process $($_.Id): $_"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    catch
+    {
+        Write-Output "Get-ComputeProcess not available or failed: $_"
+    }
+    
+    # Wait a moment for cleanup to complete
+    Start-Sleep -Seconds 3
+}
+
+function
 Remove-DockerData()
 {
     if (-not $KeepData)
@@ -408,11 +491,29 @@ Remove-DockerData()
             # Wait a moment for services to fully stop
             Start-Sleep -Seconds 2
             
+            # Check for selective removal based on user preferences
+            $removeWindowsFilter = -not ($RemoveImages -eq $false -and $RemoveNetworks -eq $false)
+            $removeVolumes = $true  # Always remove volumes unless KeepData is specified
+            
+            # If user wants to keep images or networks, preserve windowsfilter
+            if (-not $RemoveImages -or -not $RemoveNetworks)
+            {
+                $removeWindowsFilter = $false
+                Write-Output "Preserving windowsfilter directory due to -RemoveImages=$RemoveImages or -RemoveNetworks=$RemoveNetworks settings"
+            }
+            
             try
             {
+                # Check for lingering containers before attempting windowsfilter removal
+                if ($removeWindowsFilter)
+                {
+                    Write-Output "Checking for lingering containers before windowsfilter removal..."
+                    Test-LingeringContainers
+                }
+                
                 # Special handling for windowsfilter directory which is often problematic
                 $windowsFilterPath = Join-Path $global:DockerDataPath "windowsfilter"
-                if (Test-Path $windowsFilterPath)
+                if ($removeWindowsFilter -and (Test-Path $windowsFilterPath))
                 {
                     Write-Output "Removing windowsfilter directory with HCS layer destruction..."
                     
@@ -533,8 +634,10 @@ public class Hcs
                     }
                 }
                 
-                # Take ownership of the Docker data directory and its contents
-                # This is needed for directories like windowsfilter which have restrictive ACLs
+                # Now perform selective removal based on user preferences
+                Write-Output "Performing selective cleanup of Docker data directory..."
+                
+                # Take ownership of the Docker data directory and its contents for directories we want to remove
                 Write-Output "Taking ownership of Docker data directory..."
                 
                 # Use Start-Process with timeout to handle hanging takeown operation
@@ -564,77 +667,117 @@ public class Hcs
                 # Grant full control to the current user
                 & icacls.exe $global:DockerDataPath /grant "$env:USERNAME`:F" /t /c 2>$null | Out-Null
                 
-                # Try multiple methods to remove the directory
-                $removalSuccess = $false
+                # Define directories to remove based on user preferences
+                $directoriesToRemove = @()
                 
-                # Method 1: PowerShell Remove-Item
-                try
+                # Always remove containers directory
+                $containersPath = Join-Path $global:DockerDataPath "containers"
+                if (Test-Path $containersPath)
                 {
-                    Remove-Item $global:DockerDataPath -Recurse -Force -ErrorAction Stop
-                    $removalSuccess = $true
-                    Write-Output "Docker data directory removed using Remove-Item."
-                }
-                catch
-                {
-                    Write-Warning "Remove-Item failed: $_"
+                    $directoriesToRemove += $containersPath
                 }
                 
-                # Method 2: If PowerShell failed, try rd command
-                if (-not $removalSuccess -and (Test-Path $global:DockerDataPath))
+                # Remove image directory only if not preserving images
+                if ($RemoveImages)
                 {
+                    $imagePath = Join-Path $global:DockerDataPath "image"
+                    if (Test-Path $imagePath)
+                    {
+                        $directoriesToRemove += $imagePath
+                    }
+                }
+                
+                # Remove network directory only if not preserving networks  
+                if ($RemoveNetworks)
+                {
+                    $networkPath = Join-Path $global:DockerDataPath "network"
+                    if (Test-Path $networkPath)
+                    {
+                        $directoriesToRemove += $networkPath
+                    }
+                }
+                
+                # Remove volumes directory (always removed unless KeepData is specified)
+                # Note: KeepData is already checked at the beginning of this function
+                $volumesPath = Join-Path $global:DockerDataPath "volumes"
+                if (Test-Path $volumesPath)
+                {
+                    $directoriesToRemove += $volumesPath
+                }
+                
+                # Remove configuration files
+                $configFiles = @("daemon.json", "key.json")
+                foreach ($configFile in $configFiles)
+                {
+                    $configPath = Join-Path $global:DockerDataPath $configFile
+                    if (Test-Path $configPath)
+                    {
+                        try
+                        {
+                            Remove-Item $configPath -Force -ErrorAction Stop
+                            Write-Output "Removed Docker configuration file: $configFile"
+                        }
+                        catch
+                        {
+                            Write-Warning "Failed to remove configuration file $configFile : $_"
+                        }
+                    }
+                }
+                
+                # Remove selected directories
+                foreach ($dirPath in $directoriesToRemove)
+                {
+                    $dirName = Split-Path $dirPath -Leaf
+                    Write-Output "Removing Docker $dirName directory..."
+                    
                     try
                     {
-                        & cmd.exe /c "rd /s /q `"$global:DockerDataPath`""
-                        if (-not (Test-Path $global:DockerDataPath))
-                        {
-                            $removalSuccess = $true
-                            Write-Output "Docker data directory removed using rd command."
-                        }
+                        Remove-Item $dirPath -Recurse -Force -ErrorAction Stop
+                        Write-Output "Successfully removed $dirName directory"
                     }
                     catch
                     {
-                        Write-Warning "rd command failed: $_"
+                        Write-Warning "Failed to remove $dirName directory using Remove-Item: $_"
+                        
+                        # Try rd command as fallback
+                        try
+                        {
+                            & cmd.exe /c "rd /s /q `"$dirPath`""
+                            if (-not (Test-Path $dirPath))
+                            {
+                                Write-Output "Successfully removed $dirName directory using rd command"
+                            }
+                            else
+                            {
+                                Write-Warning "rd command failed to remove $dirName directory"
+                            }
+                        }
+                        catch
+                        {
+                            Write-Warning "rd command failed for $dirName directory: $_"
+                        }
                     }
                 }
                 
-                # Method 3: If still exists, try robocopy purge on the entire directory
-                if (-not $removalSuccess -and (Test-Path $global:DockerDataPath))
+                # Check if Docker data directory is now empty (except for preserved directories)
+                $remainingItems = Get-ChildItem -Path $global:DockerDataPath -ErrorAction SilentlyContinue
+                if (-not $remainingItems)
                 {
+                    # Directory is empty, remove it completely
                     try
                     {
-                        $tempEmptyDir = Join-Path $env:TEMP "EmptyDir_$(Get-Random)"
-                        New-Item -ItemType Directory -Path $tempEmptyDir -Force | Out-Null
-                        
-                        # Use robocopy to mirror an empty directory over the Docker data directory
-                        & robocopy.exe $tempEmptyDir $global:DockerDataPath /MIR /R:1 /W:1 /NP /NFL /NDL /NJH /NJS 2>$null | Out-Null
-                        
-                        # Then remove the now-empty directory
-                        Remove-Item $global:DockerDataPath -Force -ErrorAction SilentlyContinue
-                        Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
-                        
-                        if (-not (Test-Path $global:DockerDataPath))
-                        {
-                            $removalSuccess = $true
-                            Write-Output "Docker data directory removed using robocopy purge."
-                        }
+                        Remove-Item $global:DockerDataPath -Force -ErrorAction Stop
+                        Write-Output "Docker data directory completely removed"
                     }
                     catch
                     {
-                        Write-Warning "robocopy purge failed: $_"
-                        Remove-Item $tempEmptyDir -Force -ErrorAction SilentlyContinue
+                        Write-Warning "Failed to remove empty Docker data directory: $_"
                     }
-                }
-                
-                # Final sanity check: Verify the Docker folder no longer exists
-                if (Test-Path $global:DockerDataPath)
-                {
-                    Write-Warning "Docker data directory still exists after all removal attempts: $global:DockerDataPath"
-                    Write-Warning "The windowsfilter subdirectory may still be in use by Windows Container services."
-                    Write-Warning "You may need to restart your system and manually remove $global:DockerDataPath"
                 }
                 else
                 {
-                    Write-Output "Docker data directory successfully removed."
+                    Write-Output "Docker data directory preserved with remaining components:"
+                    $remainingItems | ForEach-Object { Write-Output "  - $($_.Name)" }
                 }
             }
             catch
