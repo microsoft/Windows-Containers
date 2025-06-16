@@ -159,31 +159,13 @@ Requires PowerShell version 5.0
     Uninstalls Docker Community Edition and removes related components
     
 #### SYNTAX
-    uninstall-docker-ce.ps1 [-RemoveImages] [-RemoveNetworks] [-KeepData] [-Force] [-RemoveWindowsFeatures] [<CommonParameters>]
+    uninstall-docker-ce.ps1 [-KeepData] [-Force] [-RemoveWindowsFeatures] [<CommonParameters>]
     
 #### DESCRIPTION
     Uninstalls Docker Community Edition from Windows, including the service,
-    binaries, configuration, and optionally images and networks.
+    binaries, configuration, images, networks, containers, and volumes by default.
 
 #### PARAMETERS
-    -RemoveImages [<SwitchParameter>]
-        If specified, removes all Docker images before uninstalling
-        
-        Required?                    false
-        Position?                    named
-        Default value                False
-        Accept pipeline input?       false
-        Accept wildcard characters?  false
-
-    -RemoveNetworks [<SwitchParameter>]
-        If specified, removes all custom Docker networks before uninstalling
-        
-        Required?                    false
-        Position?                    named
-        Default value                False
-        Accept pipeline input?       false
-        Accept wildcard characters?  false
-
     -KeepData [<SwitchParameter>]
         If specified, preserves Docker data directory (images, containers, volumes)
         
@@ -225,16 +207,13 @@ Requires PowerShell version 5.0
 #### Examples
     
     PS C:\>.\uninstall-docker-ce.ps1
-    Basic uninstall (removes service, binaries, data but preserves images)
+    Complete uninstall (removes everything: service, binaries, containers, volumes, images, networks, and data)
     
-    PS C:\>.\uninstall-docker-ce.ps1 -RemoveImages -RemoveNetworks
-    Complete uninstall including all images and custom networks
-    
-    PS C:\>.\uninstall-docker-ce.ps1 -Force -RemoveImages
-    Forced uninstall without confirmation prompts
+    PS C:\>.\uninstall-docker-ce.ps1 -Force
+    Complete uninstall without confirmation prompts
     
     PS C:\>.\uninstall-docker-ce.ps1 -KeepData
-    Uninstall but preserve Docker data directory
+    Uninstall but preserve Docker data directory (keeps images, containers, volumes)
     
 #### Prerequisites
 Requires PowerShell version 5.0 and Administrator privileges

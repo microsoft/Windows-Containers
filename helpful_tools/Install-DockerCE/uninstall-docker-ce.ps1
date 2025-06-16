@@ -19,13 +19,7 @@
 
     .DESCRIPTION
         Uninstalls Docker Community Edition from Windows, including the service,
-        binaries, configuration, and optionally images and networks.
-
-    .PARAMETER RemoveImages
-        If specified, removes all Docker images before uninstalling
-
-    .PARAMETER RemoveNetworks
-        If specified, removes all custom Docker networks before uninstalling
+        binaries, configuration, images, networks, containers, and volumes by default.
 
     .PARAMETER KeepData
         If specified, preserves Docker data directory (images, containers, volumes)
@@ -40,22 +34,16 @@
         .\uninstall-docker-ce.ps1
 
     .EXAMPLE
-        .\uninstall-docker-ce.ps1 -RemoveImages -RemoveNetworks
+        .\uninstall-docker-ce.ps1 -Force
 
     .EXAMPLE
-        .\uninstall-docker-ce.ps1 -Force -RemoveImages
+        .\uninstall-docker-ce.ps1 -KeepData
 
 #>
 #Requires -Version 5.0
 
 [CmdletBinding()]
 param(
-    [switch]
-    $RemoveImages,
-
-    [switch]
-    $RemoveNetworks,
-
     [switch]
     $KeepData,
 
@@ -70,8 +58,7 @@ $global:DockerDataPath = "$($env:ProgramData)\docker"
 $global:DockerServiceName = "docker"
 $global:AdminPrivileges = $false
 
-function 
-Test-Admin()
+function Test-Admin()
 {
     # Get the ID and security principal of the current user account
     $myWindowsID=[System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -96,15 +83,13 @@ Test-Admin()
     }
 }
 
-function 
-Test-Docker()
+function Test-Docker()
 {
     $service = Get-Service -Name $global:DockerServiceName -ErrorAction SilentlyContinue
     return ($service -ne $null)
 }
 
-function
-Stop-Docker()
+function Stop-Docker()
 {
     if (Test-Docker)
     {
@@ -137,8 +122,7 @@ Stop-Docker()
     }
 }
 
-function
-Remove-DockerService()
+function Remove-DockerService()
 {
     if (Test-Docker)
     {
@@ -170,8 +154,7 @@ Remove-DockerService()
     }
 }
 
-function
-Remove-DockerBinaries()
+function Remove-DockerBinaries()
 {
     Write-Output "Removing Docker binaries..."
     
@@ -213,8 +196,7 @@ Remove-DockerBinaries()
     }
 }
 
-function
-Remove-DockerContainers()
+function Remove-DockerContainers()
 {
     Write-Output "Checking for existing Docker containers..."
     try
@@ -258,8 +240,7 @@ Remove-DockerContainers()
     }
 }
 
-function
-Remove-DockerVolumes()
+function Remove-DockerVolumes()
 {
     Write-Output "Checking for existing Docker volumes..."
     try
@@ -295,82 +276,99 @@ Remove-DockerVolumes()
     }
 }
 
-function
-Remove-DockerImages()
+function Remove-DockerImages()
 {
-    if ($RemoveImages)
+    Write-Output "Checking for existing Docker images..."
+    try
     {
-        Write-Output "Checking for existing Docker images..."
-        try
+        $images = docker images -q 2>$null
+        if ($images)
         {
-            $images = docker images -q 2>$null
-            if ($images)
+            $imageCount = ($images | Measure-Object).Count
+            Write-Output "Found $imageCount Docker image(s)."
+            
+            if (-not $Force)
             {
-                $imageCount = ($images | Measure-Object).Count
-                Write-Output "Found $imageCount Docker image(s)."
+                $response = Read-Host "Do you want to remove all $imageCount Docker image(s)? (y/N)"
+                if ($response -ne "y" -and $response -ne "Y")
+                {
+                    Write-Output "Skipping Docker images removal."
+                    return
+                }
+            }
+            
+            Write-Output "Removing all Docker images..."
+            docker rmi -f $images 2>$null
+            Write-Output "Docker images removed."
+        }
+        else
+        {
+            Write-Output "No Docker images found."
+        }
+    }
+    catch
+    {
+        Write-Warning "Failed to remove Docker images: $_"
+    }
+}
+
+function Remove-DockerNetworks()
+{
+    Write-Output "Checking for existing Docker networks..."
+    try
+    {
+        $networks = docker network ls --format "{{.Name}}" 2>$null
+        if ($networks)
+        {
+            # Filter out default networks
+            $customNetworks = @()
+            foreach ($network in $networks)
+            {
+                if ($network -ne "bridge" -and $network -ne "host" -and $network -ne "none" -and $network -ne "nat")
+                {
+                    $customNetworks += $network
+                }
+            }
+            
+            if ($customNetworks.Count -gt 0)
+            {
+                Write-Output "Found $($customNetworks.Count) custom Docker network(s)."
                 
                 if (-not $Force)
                 {
-                    $response = Read-Host "Do you want to remove all $imageCount Docker image(s)? (y/N)"
+                    $response = Read-Host "Do you want to remove all $($customNetworks.Count) custom Docker network(s)? (y/N)"
                     if ($response -ne "y" -and $response -ne "Y")
                     {
-                        Write-Output "Skipping Docker images removal."
+                        Write-Output "Skipping Docker networks removal."
                         return
                     }
                 }
                 
-                Write-Output "Removing all Docker images..."
-                docker rmi -f $images 2>$null
-                Write-Output "Docker images removed."
-            }
-            else
-            {
-                Write-Output "No Docker images found."
-            }
-        }
-        catch
-        {
-            Write-Warning "Failed to remove Docker images: $_"
-        }
-    }
-}
-
-function
-Remove-DockerNetworks()
-{
-    if ($RemoveNetworks)
-    {
-        Write-Output "Removing custom Docker networks..."
-        try
-        {
-            $networks = docker network ls --format "{{.Name}}" 2>$null
-            if ($networks)
-            {
-                foreach ($network in $networks)
+                Write-Output "Removing custom Docker networks..."
+                foreach ($network in $customNetworks)
                 {
-                    # Skip default networks
-                    if ($network -ne "bridge" -and $network -ne "host" -and $network -ne "none" -and $network -ne "nat")
-                    {
-                        Write-Output "Removing network: $network"
-                        docker network rm $network 2>$null
-                    }
+                    Write-Output "Removing network: $network"
+                    docker network rm $network 2>$null
                 }
                 Write-Output "Custom Docker networks removed."
             }
             else
             {
-                Write-Output "No Docker networks found."
+                Write-Output "No custom Docker networks found."
             }
         }
-        catch
+        else
         {
-            Write-Warning "Failed to remove Docker networks: $_"
+            Write-Output "No Docker networks found."
         }
+    }
+    catch
+    {
+        Write-Warning "Failed to remove Docker networks: $_"
     }
 }
 
-function
-Stop-WindowsContainerServices()
+function Stop-WindowsContainerServices()
 {
     # Stop additional Windows Container services that might be locking files
     $services = @("cexecsvc", "vmcompute", "vmicguestinterface", "vmicheartbeat", "vmickvpexchange", "vmicrdv", "vmicshutdown", "vmictimesync", "vmicvmsession", "vmicvss")
@@ -393,8 +391,7 @@ Stop-WindowsContainerServices()
     }
 }
 
-function
-Test-LingeringContainers()
+function Test-LingeringContainers()
 {
     Write-Output "Checking for lingering containers and compute processes..."
     
@@ -476,8 +473,7 @@ Test-LingeringContainers()
     Start-Sleep -Seconds 3
 }
 
-function
-Remove-DockerData()
+function Remove-DockerData()
 {
     if (-not $KeepData)
     {
@@ -491,25 +487,15 @@ Remove-DockerData()
             # Wait a moment for services to fully stop
             Start-Sleep -Seconds 2
             
-            # Check for selective removal based on user preferences
-            $removeWindowsFilter = -not ($RemoveImages -eq $false -and $RemoveNetworks -eq $false)
+            # Since we always remove images and networks, always remove windowsfilter
+            $removeWindowsFilter = $true
             $removeVolumes = $true  # Always remove volumes unless KeepData is specified
-            
-            # If user wants to keep images or networks, preserve windowsfilter
-            if (-not $RemoveImages -or -not $RemoveNetworks)
-            {
-                $removeWindowsFilter = $false
-                Write-Output "Preserving windowsfilter directory due to -RemoveImages=$RemoveImages or -RemoveNetworks=$RemoveNetworks settings"
-            }
             
             try
             {
                 # Check for lingering containers before attempting windowsfilter removal
-                if ($removeWindowsFilter)
-                {
-                    Write-Output "Checking for lingering containers before windowsfilter removal..."
-                    Test-LingeringContainers
-                }
+                Write-Output "Checking for lingering containers before windowsfilter removal..."
+                Test-LingeringContainers
                 
                 # Special handling for windowsfilter directory which is often problematic
                 $windowsFilterPath = Join-Path $global:DockerDataPath "windowsfilter"
@@ -677,24 +663,18 @@ public class Hcs
                     $directoriesToRemove += $containersPath
                 }
                 
-                # Remove image directory only if not preserving images
-                if ($RemoveImages)
+                # Remove image directory
+                $imagePath = Join-Path $global:DockerDataPath "image"
+                if (Test-Path $imagePath)
                 {
-                    $imagePath = Join-Path $global:DockerDataPath "image"
-                    if (Test-Path $imagePath)
-                    {
-                        $directoriesToRemove += $imagePath
-                    }
+                    $directoriesToRemove += $imagePath
                 }
                 
-                # Remove network directory only if not preserving networks  
-                if ($RemoveNetworks)
+                # Remove network directory
+                $networkPath = Join-Path $global:DockerDataPath "network"
+                if (Test-Path $networkPath)
                 {
-                    $networkPath = Join-Path $global:DockerDataPath "network"
-                    if (Test-Path $networkPath)
-                    {
-                        $directoriesToRemove += $networkPath
-                    }
+                    $directoriesToRemove += $networkPath
                 }
                 
                 # Remove volumes directory (always removed unless KeepData is specified)
@@ -813,8 +793,7 @@ public class Hcs
     }
 }
 
-function
-Remove-DockerRegistryKeys()
+function Remove-DockerRegistryKeys()
 {
     Write-Output "Removing Docker registry keys..."
     
@@ -842,8 +821,7 @@ Remove-DockerRegistryKeys()
     }
 }
 
-function
-Remove-WindowsFeatures()
+function Remove-WindowsFeatures()
 {
     if ($RemoveWindowsFeatures)
     {
@@ -902,8 +880,7 @@ Remove-WindowsFeatures()
     }
 }
 
-function
-Remove-DockerCE()
+function Remove-DockerCE()
 {
     Write-Output "Starting Docker CE uninstallation..."
     
@@ -912,18 +889,11 @@ Remove-DockerCE()
     # Show what will be removed
     Write-Output "The following actions will be performed:"
     Write-Output "- Stop and remove all Docker containers"
+    Write-Output "- Remove all Docker volumes"
+    Write-Output "- Remove all Docker images"
+    Write-Output "- Remove custom Docker networks"
     Write-Output "- Stop and remove Docker service"
     Write-Output "- Remove Docker binaries from System32"
-    
-    if ($RemoveImages)
-    {
-        Write-Output "- Remove all Docker images"
-    }
-    
-    if ($RemoveNetworks)
-    {
-        Write-Output "- Remove custom Docker networks"
-    }
     
     if (-not $KeepData)
     {
