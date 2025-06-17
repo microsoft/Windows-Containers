@@ -225,5 +225,5 @@ Requires PowerShell version 5.0
     PS C:\> .\uninstall-docker-ce.ps1 -KeepImages
     Uninstall but preserve images
 
-#### PREREQUISTES
+#### PREREQUISITES
 Requires PowerShell version 5.0 and Administrator privileges
