@@ -186,7 +186,7 @@ Requires PowerShell version 5.0
         Accept pipeline input?       false
         Accept wildcard characters?  false
 
-    -KeepVolums [<SwitchParameter>]
+    -KeepVolumes [<SwitchParameter>]
         If specified, preserves volumes
         
         Required?                    false
