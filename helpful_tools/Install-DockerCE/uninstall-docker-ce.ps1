@@ -666,7 +666,8 @@ function Remove-DockerRegistryKeys()
     
     $registryPaths = @(
         "HKLM:\SYSTEM\CurrentControlSet\Services\docker",
-        "HKLM:\SYSTEM\ControlSet002\Services\docker"
+        "HKLM:\SYSTEM\ControlSet002\Services\docker",
+        "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\docker"
     )
     
     foreach ($regPath in $registryPaths)
