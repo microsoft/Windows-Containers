@@ -572,10 +572,10 @@ public class Hcs
                             
                             # Wait for the job to complete with a reasonable timeout
                             $timeout = 120 # 2 minutes
-                            if ($job | Wait-Job -Timeout $timeout)
+                            if (Wait-Job $job -Timeout $timeout)
                             {
-                                $results = $job | Receive-Job
-                                $job | Remove-Job
+                                $results = Receive-Job $job
+                                Remove-Job $job
                                 
                                 $successCount = ($results | Where-Object { $_.Success }).Count
                                 $failCount = ($results | Where-Object { -not $_.Success }).Count
