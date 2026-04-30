@@ -303,7 +303,16 @@ Install-ContainerHost
 
     if ($HyperV)
     {
-        Install-Feature -FeatureName Hyper-V
+        # Add-WindowsFeature (ServerManager) uses "Hyper-V"; Enable-WindowsOptionalFeature (DISM)
+        # requires "Microsoft-Hyper-V". Pass the correct name depending on which API is available.
+        if (Get-Command Get-WindowsFeature -ErrorAction SilentlyContinue)
+        {
+            Install-Feature -FeatureName Hyper-V
+        }
+        else
+        {
+            Install-Feature -FeatureName Microsoft-Hyper-V
+        }
     }
 
     if ($global:RebootRequired)
