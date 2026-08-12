@@ -36,13 +36,13 @@
     .PARAMETER SkipDefaultHost
         Prevents setting localhost as the default network configuration
 
-    .PARAMETER Force 
+    .PARAMETER Force
         If a restart is required, forces an immediate restart.
-        
-    .PARAMETER HyperV 
+
+    .PARAMETER HyperV
         If passed, prepare the machine for Hyper-V containers
-        
-    .PARAMETER NATSubnet 
+
+    .PARAMETER NATSubnet
         Use to override the default Docker NAT Subnet when in NAT mode.
 
     .PARAMETER NoRestart
@@ -251,13 +251,13 @@ function
 New-ContainerTransparentNetwork
 {
     # Check if transparent network already created
-    $networkList = docker network ls 
+    $networkList = docker network ls
     if ($networkList -match '\bTransparent\b')
     {
         Write-Output "Network with the name Transparent exists."
         return
     }
- 
+
     # Continue with network creation
     if ($ExternalNetAdapter)
     {
@@ -294,7 +294,7 @@ Install-ContainerHost
         {
             Write-Output "Enabling Hyper-V containers by default for Client SKU"
             $HyperV = $true
-        }    
+        }
     }
     #
     # Validate required Windows features
@@ -382,7 +382,7 @@ Install-ContainerHost
             else
             {
                 Write-Output "Networking is already configured.  Confirming configuration..."
-                
+
                 $transparentNetwork = $networks |? { $_.Mode -eq "Transparent" }
 
                 if ($transparentNetwork -eq $null)
@@ -437,16 +437,16 @@ Copy-File
     param(
         [string]
         $SourcePath,
-        
+
         [string]
         $DestinationPath
     )
-    
+
     if ($SourcePath -eq $DestinationPath)
     {
         return
     }
-          
+
     if (Test-Path $SourcePath)
     {
         Copy-Item -Path $SourcePath -Destination $DestinationPath
@@ -458,7 +458,7 @@ Copy-File
             $handler = New-Object System.Net.Http.HttpClientHandler
             $client = New-Object System.Net.Http.HttpClient($handler)
             $client.Timeout = New-Object System.TimeSpan(0, 30, 0)
-            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new() 
+            $cancelTokenSource = [System.Threading.CancellationTokenSource]::new()
             $responseMsg = $client.GetAsync([System.Uri]::new($SourcePath), $cancelTokenSource.Token)
             $responseMsg.Wait()
 
@@ -474,9 +474,9 @@ Copy-File
                     if ($copyStreamOp.Exception -ne $null)
                     {
                         throw $copyStreamOp.Exception
-                    }      
+                    }
                 }
-            }  
+            }
         }
         elseif ($PSVersionTable.PSVersion.Major -ge 5)
         {
@@ -491,7 +491,7 @@ Copy-File
         {
             $webClient = New-Object System.Net.WebClient
             $webClient.DownloadFile($SourcePath, $DestinationPath)
-        } 
+        }
     }
     else
     {
@@ -500,16 +500,16 @@ Copy-File
 }
 
 
-function 
+function
 Test-Admin()
 {
     # Get the ID and security principal of the current user account
     $myWindowsID=[System.Security.Principal.WindowsIdentity]::GetCurrent()
     $myWindowsPrincipal=new-object System.Security.Principal.WindowsPrincipal($myWindowsID)
-  
+
     # Get the security principal for the Administrator role
     $adminRole=[System.Security.Principal.WindowsBuiltInRole]::Administrator
-  
+
     # Check to see if we are currently running "as Administrator"
     if ($myWindowsPrincipal.IsInRole($adminRole))
     {
@@ -522,31 +522,31 @@ Test-Admin()
         # We are not running "as Administrator"
         # Exit from the current, unelevated, process
         #
-        throw "You must run this script as administrator"   
+        throw "You must run this script as administrator"
     }
 }
 
 
-function 
+function
 Test-Client()
 {
     return (-not ((Get-Command Get-WindowsFeature -ErrorAction SilentlyContinue) -or (Test-Nano)))
 }
 
 
-function 
+function
 Test-Nano()
 {
     $EditionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID').EditionId
 
-    return (($EditionId -eq "ServerStandardNano") -or 
-            ($EditionId -eq "ServerDataCenterNano") -or 
-            ($EditionId -eq "NanoServer") -or 
+    return (($EditionId -eq "ServerStandardNano") -or
+            ($EditionId -eq "ServerDataCenterNano") -or
+            ($EditionId -eq "NanoServer") -or
             ($EditionId -eq "ServerTuva"))
 }
 
 
-function 
+function
 Wait-Network()
 {
     $connectedAdapter = Get-NetAdapter |? ConnectorPresent
@@ -555,7 +555,7 @@ Wait-Network()
     {
         throw "No connected network"
     }
-       
+
     $startTime = Get-Date
     $timeElapsed = $(Get-Date) - $startTime
 
@@ -578,7 +578,7 @@ Wait-Network()
 }
 
 
-function 
+function
 Install-Docker()
 {
     [CmdletBinding()]
@@ -590,7 +590,7 @@ Install-Docker()
         [string]
         [ValidateNotNullOrEmpty()]
         $DockerDPath = "default",
-                
+
         [string]
         [ValidateNotNullOrEmpty()]
         $NATSubnet,
@@ -610,7 +610,7 @@ Install-Docker()
         Write-Output "Checking Docker versions"
         #Get the list of .zip packages available from docker.
         $availableVersions = ((Invoke-WebRequest -Uri $DefaultDockerLocation -UseBasicParsing).Links | Where-Object {$_.href -like "docker*"}).href | Sort-Object -Descending
-        
+
         #Parse the versions from the file names
         $availableVersions = ($availableVersions | Select-String -Pattern "docker-(\d+\.\d+\.\d+).+"  -AllMatches | Select-Object -Expand Matches | %{ $_.Groups[1].Value })
         $version = $availableVersions[0]
@@ -639,7 +639,7 @@ Install-Docker()
         $global:ProgressPreference = "SilentlyContinue"
         Expand-Archive -Path "$destinationFolder\docker-$version.zip" -DestinationPath "$destinationFolder\docker-$version"
         $global:ProgressPreference = "Continue"
-        
+
         if($DockerPath -eq "default") {
             $DockerPath = "$destinationFolder\docker-$version\docker\docker.exe"
         }
@@ -650,13 +650,13 @@ Install-Docker()
 
     Write-Output "Installing Docker... $DockerPath"
     Copy-File -SourcePath $DockerPath -DestinationPath $env:windir\System32\docker.exe
-        
+
     Write-Output "Installing Docker daemon... $DockerDPath"
     Copy-File -SourcePath $DockerDPath -DestinationPath $env:windir\System32\dockerd.exe
     Copy-File -SourcePath $DockerDPath -DestinationPath $env:windir\SysWow64\dockerd.exe
-    
+
     $dockerConfigPath = Join-Path $global:DockerDataPath "config"
-    
+
     if (!(Test-Path $dockerConfigPath))
     {
         md -Path $dockerConfigPath | Out-Null
@@ -669,7 +669,7 @@ Install-Docker()
     Write-Output "Configuring the docker service..."
 
     $daemonSettings = New-Object PSObject
-        
+
     $certsPath = Join-Path $global:DockerDataPath "certs.d"
 
     if (Test-Path $certsPath)
@@ -694,7 +694,7 @@ Install-Docker()
     $daemonSettingsFile = Join-Path $dockerConfigPath "daemon.json"
 
     $daemonSettings | ConvertTo-Json | Out-File -FilePath $daemonSettingsFile -Encoding ASCII
-    
+
     & dockerd --register-service --service-name $global:DockerServiceName
 
     Start-Docker
@@ -710,27 +710,27 @@ Install-Docker()
     }
 
     Write-Output "The following images are present on this machine:"
-    
+
     docker images -a | Write-Output
 
     Write-Output ""
 }
 
-function 
+function
 Start-Docker()
 {
     Start-Service -Name $global:DockerServiceName
 }
 
 
-function 
+function
 Stop-Docker()
 {
     Stop-Service -Name $global:DockerServiceName
 }
 
 
-function 
+function
 Test-Docker()
 {
     $service = Get-Service -Name $global:DockerServiceName -ErrorAction SilentlyContinue
@@ -739,7 +739,7 @@ Test-Docker()
 }
 
 
-function 
+function
 Wait-Docker()
 {
     Write-Output "Waiting for Docker daemon..."
@@ -759,14 +759,14 @@ Wait-Docker()
 
             $dockerReady = $true
         }
-        catch 
+        catch
         {
             $timeElapsed = $(Get-Date) - $startTime
 
             if ($($timeElapsed).TotalMinutes -ge 1)
             {
                 throw "Docker Daemon did not start successfully within 1 minute."
-            } 
+            }
 
             # Swallow error and try again
             Start-Sleep -sec 1
@@ -779,7 +779,7 @@ try
 {
     Install-ContainerHost
 }
-catch 
+catch
 {
     Write-Error $_
 }
