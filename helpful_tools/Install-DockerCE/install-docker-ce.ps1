@@ -51,6 +51,10 @@
     .PARAMETER ContainerBaseImage
         Use this to specify the URI of the container base image you wish to pre-pull
 
+    .PARAMETER DockerInstallPath
+        Directory to install docker.exe and dockerd.exe into. Defaults to "$env:ProgramFiles\Docker".
+        This directory is created if it does not already exist, and is appended to the system PATH.
+
     .PARAMETER Staging
 
     .PARAMETER TransparentNetwork
@@ -99,6 +103,10 @@ param(
 
     [string]
     $ContainerBaseImage,
+
+    [string]
+    [ValidateNotNullOrEmpty()]
+    $DockerInstallPath = "$env:ProgramFiles\Docker",
 
     [Parameter(ParameterSetName="Staging", Mandatory)]
     [switch]
@@ -345,11 +353,11 @@ Install-ContainerHost
     {
         if ($NATSubnet)
         {
-            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage
+            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -NATSubnet $NATSubnet -ContainerBaseImage $ContainerBaseImage -DockerInstallPath $DockerInstallPath
         }
         else
         {
-            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage
+            Install-Docker -DockerPath $DockerPath -DockerDPath $DockerDPath -ContainerBaseImage $ContainerBaseImage -DockerInstallPath $DockerInstallPath
         }
     }
 
@@ -579,6 +587,31 @@ Wait-Network()
 
 
 function
+Add-PathDirectory
+{
+    [CmdletBinding()]
+    param(
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Directory
+    )
+
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+
+    if (($machinePath -split ";" |? { $_ -ne "" }) -notcontains $Directory)
+    {
+        Write-Output "Adding $Directory to the system PATH..."
+        [Environment]::SetEnvironmentVariable("Path", "$machinePath;$Directory", "Machine")
+    }
+
+    if (($env:Path -split ";" |? { $_ -ne "" }) -notcontains $Directory)
+    {
+        $env:Path = "$env:Path;$Directory"
+    }
+}
+
+
+function
 Install-Docker()
 {
     [CmdletBinding()]
@@ -599,7 +632,11 @@ Install-Docker()
         $SkipDefaultHost,
 
         [string]
-        $ContainerBaseImage
+        $ContainerBaseImage,
+
+        [string]
+        [ValidateNotNullOrEmpty()]
+        $DockerInstallPath = "$env:ProgramFiles\Docker"
     )
 
     Test-Admin
@@ -648,12 +685,18 @@ Install-Docker()
         }
     }
 
+    if (!(Test-Path $DockerInstallPath))
+    {
+        md -Path $DockerInstallPath | Out-Null
+    }
+
     Write-Output "Installing Docker... $DockerPath"
-    Copy-File -SourcePath $DockerPath -DestinationPath $env:windir\System32\docker.exe
+    Copy-File -SourcePath $DockerPath -DestinationPath "$DockerInstallPath\docker.exe"
 
     Write-Output "Installing Docker daemon... $DockerDPath"
-    Copy-File -SourcePath $DockerDPath -DestinationPath $env:windir\System32\dockerd.exe
-    Copy-File -SourcePath $DockerDPath -DestinationPath $env:windir\SysWow64\dockerd.exe
+    Copy-File -SourcePath $DockerDPath -DestinationPath "$DockerInstallPath\dockerd.exe"
+
+    Add-PathDirectory -Directory $DockerInstallPath
 
     $dockerConfigPath = Join-Path $global:DockerDataPath "config"
 

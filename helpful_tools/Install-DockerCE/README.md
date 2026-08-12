@@ -9,7 +9,7 @@
     Installs the prerequisites for running Windows containers with Docker CE
 
 #### SYNTAX
-    install-docker-ce.ps1 [-DockerPath <String>] [-DockerDPath <String>] [-DockerVersion <String>] [-ContainerBaseImage <String>] [-ExternalNetAdapter <String>]
+    install-docker-ce.ps1 [-DockerPath <String>] [-DockerDPath <String>] [-DockerVersion <String>] [-ContainerBaseImage <String>] [-DockerInstallPath <String>] [-ExternalNetAdapter <String>]
     [-Force] [-HyperV] [-SkipDefaultHost] [-NATSubnet <String>] [-NoRestart] [-PSDirect] [-Staging]
     [-UseDHCP] [-WimPath <String>] [-TarPath] [<CommonParameters>]
 
@@ -106,6 +106,15 @@
         Required?                    false
         Position?                    named
         Default value
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+    -DockerInstallPath [<String>]
+        Directory to install docker.exe and dockerd.exe into. Defaults to "$env:ProgramFiles\Docker".
+        This directory is created if it does not already exist, and is appended to the system PATH.
+
+        Required?                    false
+        Position?                    named
+        Default value                $env:ProgramFiles\Docker
         Accept pipeline input?       false
         Accept wildcard characters?  false
 
