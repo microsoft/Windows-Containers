@@ -36,6 +36,10 @@
     .PARAMETER Force
         If specified, skips confirmation prompts and forces removal
 
+    .PARAMETER DockerInstallPath
+        Directory containing docker.exe and dockerd.exe. Defaults to "$env:ProgramFiles\Docker".
+        The registered Docker service path is also inspected for custom install locations.
+
     .EXAMPLE
         .\uninstall-docker-ce.ps1
 
@@ -66,7 +70,11 @@ param(
     $KeepNetworks,
 
     [switch]
-    $Force
+    $Force,
+
+    [string]
+    [ValidateNotNullOrEmpty()]
+    $DockerInstallPath = "$env:ProgramFiles\Docker"
 )
 
 $global:DockerDataPath = "$($env:ProgramData)\docker"
@@ -102,6 +110,50 @@ function Test-Docker()
 {
     $service = Get-Service -Name $global:DockerServiceName -ErrorAction SilentlyContinue
     return ($service -ne $null)
+}
+
+function Get-DockerServiceExecutablePath()
+{
+    $serviceRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$($global:DockerServiceName)"
+
+    try
+    {
+        $imagePath = (Get-ItemProperty -Path $serviceRegistryPath -Name ImagePath -ErrorAction Stop).ImagePath
+        if ($imagePath -match '^\s*"([^"]+)"')
+        {
+            return [Environment]::ExpandEnvironmentVariables($Matches[1])
+        }
+
+        if ($imagePath -match '^\s*(.+?\.exe)(?:\s|$)')
+        {
+            return [Environment]::ExpandEnvironmentVariables($Matches[1].Trim())
+        }
+    }
+    catch
+    {
+        return $null
+    }
+
+    return $null
+}
+
+function Get-DockerInstallPaths()
+{
+    param(
+        [string]
+        $ServiceExecutablePath
+    )
+
+    $installPaths = @($DockerInstallPath)
+    if ($ServiceExecutablePath)
+    {
+        $installPaths += Split-Path -Parent -Path $ServiceExecutablePath
+    }
+
+    return @($installPaths |
+        Where-Object { $_ } |
+        ForEach-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') } |
+        Select-Object -Unique)
 }
 
 function Stop-Docker()
@@ -165,43 +217,92 @@ function Remove-DockerService()
 
 function Remove-DockerBinaries()
 {
+    param(
+        [string[]]
+        $InstallPaths
+    )
+
     Write-Output "Removing Docker binaries..."
-    
-    $dockerExe = Join-Path $env:windir "System32\docker.exe"
-    $dockerdExe = Join-Path $env:windir "System32\dockerd.exe"
-    
-    if (Test-Path $dockerExe)
+
+    $binaryPaths = @(
+        (Join-Path $env:windir "System32\docker.exe"),
+        (Join-Path $env:windir "System32\dockerd.exe")
+    )
+
+    foreach ($installPath in $InstallPaths)
+    {
+        $binaryPaths += Join-Path $installPath "docker.exe"
+        $binaryPaths += Join-Path $installPath "dockerd.exe"
+    }
+
+    foreach ($binaryPath in ($binaryPaths | Select-Object -Unique))
+    {
+        if (Test-Path -LiteralPath $binaryPath)
+        {
+            try
+            {
+                Remove-Item -LiteralPath $binaryPath -Force -ErrorAction Stop
+                Write-Output "Removed $binaryPath."
+            }
+            catch
+            {
+                Write-Warning "Failed to remove $binaryPath`: $_"
+            }
+        }
+    }
+
+    foreach ($installPath in $InstallPaths)
+    {
+        if (Test-Path -LiteralPath $installPath)
+        {
+            try
+            {
+                $remainingItems = @(Get-ChildItem -LiteralPath $installPath -Force -ErrorAction Stop)
+                if ($remainingItems.Count -eq 0)
+                {
+                    Remove-Item -LiteralPath $installPath -Force -ErrorAction Stop
+                    Write-Output "Removed empty Docker install directory: $installPath"
+                }
+            }
+            catch
+            {
+                Write-Warning "Failed to remove Docker install directory $installPath`: $_"
+            }
+        }
+    }
+}
+
+function Remove-DockerPathEntries()
+{
+    param(
+        [string[]]
+        $InstallPaths
+    )
+
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    if (-not $machinePath)
+    {
+        return
+    }
+
+    $normalizedInstallPaths = @($InstallPaths | ForEach-Object { $_.TrimEnd('\') })
+    $pathEntries = @($machinePath -split ';' | Where-Object { $_ })
+    $updatedPathEntries = @($pathEntries | Where-Object {
+        $entry = [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\')
+        $normalizedInstallPaths -notcontains $entry
+    })
+
+    if ($updatedPathEntries.Count -ne $pathEntries.Count)
     {
         try
         {
-            Remove-Item $dockerExe -Force
-            Write-Output "Removed docker.exe from System32."
+            [Environment]::SetEnvironmentVariable("Path", ($updatedPathEntries -join ';'), "Machine")
+            Write-Output "Removed Docker install directory from the system PATH."
         }
         catch
         {
-            Write-Warning "Failed to remove docker.exe: $_"
+            Write-Warning "Failed to remove Docker install directory from the system PATH: $_"
         }
-    }
-    else
-    {
-        Write-Output "docker.exe not found in System32."
-    }
-    
-    if (Test-Path $dockerdExe)
-    {
-        try
-        {
-            Remove-Item $dockerdExe -Force
-            Write-Output "Removed dockerd.exe from System32."
-        }
-        catch
-        {
-            Write-Warning "Failed to remove dockerd.exe: $_"
-        }
-    }
-    else
-    {
-        Write-Output "dockerd.exe not found in System32."
     }
 }
 
@@ -688,11 +789,102 @@ function Remove-DockerRegistryKeys()
     }
 }
 
+function Test-DockerUninstall()
+{
+    param(
+        [string[]]
+        $InstallPaths,
+
+        [bool]
+        $DataShouldBeRemoved
+    )
+
+    $leftovers = @()
+    $dockerdProcesses = @(Get-Process -Name "dockerd" -ErrorAction SilentlyContinue)
+    foreach ($process in $dockerdProcesses)
+    {
+        $leftovers += "Running process: dockerd.exe (PID $($process.Id))"
+    }
+
+    if (Get-Service -Name $global:DockerServiceName -ErrorAction SilentlyContinue)
+    {
+        $leftovers += "Service: $($global:DockerServiceName)"
+    }
+
+    $registryPaths = @(
+        "HKLM:\SYSTEM\CurrentControlSet\Services\docker",
+        "HKLM:\SYSTEM\ControlSet002\Services\docker",
+        "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\docker"
+    )
+    foreach ($registryPath in $registryPaths)
+    {
+        if (Test-Path -LiteralPath $registryPath)
+        {
+            $leftovers += "Registry entry: $registryPath"
+        }
+    }
+
+    $binaryPaths = @(
+        (Join-Path $env:windir "System32\docker.exe"),
+        (Join-Path $env:windir "System32\dockerd.exe")
+    )
+    foreach ($installPath in $InstallPaths)
+    {
+        $binaryPaths += Join-Path $installPath "docker.exe"
+        $binaryPaths += Join-Path $installPath "dockerd.exe"
+    }
+
+    foreach ($binaryPath in ($binaryPaths | Select-Object -Unique))
+    {
+        if (Test-Path -LiteralPath $binaryPath)
+        {
+            $leftovers += "Binary: $binaryPath"
+        }
+    }
+
+    foreach ($installPath in $InstallPaths)
+    {
+        if (Test-Path -LiteralPath $installPath)
+        {
+            $leftovers += "Install directory: $installPath"
+        }
+    }
+
+    if ($DataShouldBeRemoved -and (Test-Path -LiteralPath $global:DockerDataPath))
+    {
+        $leftovers += "Data directory: $($global:DockerDataPath)"
+    }
+
+    $dockerDownloads = "$env:UserProfile\DockerDownloads"
+    if ($DataShouldBeRemoved -and (Test-Path -LiteralPath $dockerDownloads))
+    {
+        $leftovers += "Download directory: $dockerDownloads"
+    }
+
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $machinePathEntries = @($machinePath -split ';' | Where-Object { $_ } | ForEach-Object {
+        [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\')
+    })
+    foreach ($installPath in $InstallPaths)
+    {
+        if ($machinePathEntries -contains $installPath.TrimEnd('\'))
+        {
+            $leftovers += "System PATH entry: $installPath"
+        }
+    }
+
+    return @($leftovers | Select-Object -Unique)
+}
+
 function Remove-DockerCE()
 {
     Write-Output "Starting Docker CE uninstallation..."
     
     Test-Admin
+
+    # Capture the registered executable before removing the service and registry keys.
+    $serviceExecutablePath = Get-DockerServiceExecutablePath
+    $dockerInstallPaths = @(Get-DockerInstallPaths -ServiceExecutablePath $serviceExecutablePath)
     
     # Show what will be removed
     Write-Output "The following actions will be performed:"
@@ -715,7 +907,7 @@ function Remove-DockerCE()
         Write-Output "- Remove custom Docker networks"
     }
     
-    if (-not $KeepImages -and -not $KeepVolumes -and -not $KeepNetworks)
+    if (-not $KeepData -and -not $KeepImages -and -not $KeepVolumes -and -not $KeepNetworks)
     {
         Write-Output "- Remove Docker data directory"
     }
@@ -782,15 +974,33 @@ function Remove-DockerCE()
     Remove-DockerRegistryKeys
     
     # Remove binaries
-    Remove-DockerBinaries
+    Remove-DockerBinaries -InstallPaths $dockerInstallPaths
+
+    # Remove install directory entries added by install-docker-ce.ps1
+    Remove-DockerPathEntries -InstallPaths $dockerInstallPaths
     
     # Remove data directory
-    if (-not $KeepImages -and -not $KeepVolumes -and -not $KeepNetworks)
+    $dataShouldBeRemoved = -not $KeepData -and -not $KeepImages -and -not $KeepVolumes -and -not $KeepNetworks
+    if ($dataShouldBeRemoved)
     {
         Remove-DockerData
     }
-    
-    Write-Output "`nDocker CE uninstallation completed.`n"
+
+    Write-Output "`nValidating Docker CE removal..."
+    $leftovers = @(Test-DockerUninstall -InstallPaths $dockerInstallPaths -DataShouldBeRemoved $dataShouldBeRemoved)
+    if ($leftovers.Count -gt 0)
+    {
+        Write-Warning "Docker CE uninstallation completed with $($leftovers.Count) leftover item(s):"
+        foreach ($leftover in $leftovers)
+        {
+            Write-Warning "  - $leftover"
+        }
+        Write-Warning "Stop any remaining dockerd.exe process, close handles that lock these paths, and remove the listed items manually."
+    }
+    else
+    {
+        Write-Output "Docker CE uninstallation completed successfully. No targeted leftovers were found.`n"
+    }
 }
 
 try

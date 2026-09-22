@@ -170,16 +170,37 @@ Requires PowerShell version 5.0
     Uninstalls Docker Community Edition and removes related components
 
 #### SYNTAX
-    uninstall-docker-ce.ps1 [-Force] [-KeepImages] [-KeepVolumes] [-KeepNetworks]
+    uninstall-docker-ce.ps1 [-Force] [-KeepData] [-KeepImages] [-KeepVolumes] [-KeepNetworks] [-DockerInstallPath <String>]
 
 #### DESCRIPTION
     Uninstalls Docker Community Edition from Windows, including the service,
     binaries, images, networks, containers, and volumes by default.
+    After cleanup, validates that the Docker process, service entries, binaries,
+    install directory, PATH entry, and removable data directories are gone.
 
 #### PARAMETERS
     -Force [<SwitchParameter>]
         If specified, skips confirmation prompts and forces removal
         
+        Required?                    false
+        Position?                    named
+        Default value                false
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -DockerInstallPath <String>
+        Directory containing docker.exe and dockerd.exe. The registered Docker
+        service path is also inspected to discover custom install locations.
+
+        Required?                    false
+        Position?                    named
+        Default value                %ProgramFiles%\Docker
+        Accept pipeline input?       false
+        Accept wildcard characters?  false
+
+    -KeepData [<SwitchParameter>]
+        If specified, preserves the Docker data directory
+
         Required?                    false
         Position?                    named
         Default value                false
