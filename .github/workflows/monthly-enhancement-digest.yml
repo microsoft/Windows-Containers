@@ -1,0 +1,56 @@
+name: Monthly enhancement digest
+
+on:
+  schedule:
+    - cron: '17 17 1 * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview the report without sending it to Teams
+        type: boolean
+        default: true
+      month:
+        description: Reporting month (YYYY-MM); empty means previous UTC calendar month
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: monthly-enhancement-digest
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_MONTHLY_ENHANCEMENT_DIGEST == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check digest behavior
+        shell: pwsh
+        run: .\.github\scripts\Test-MonthlyEnhancementDigest.ps1
+      - name: Generate report and optionally send to Teams
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT_MONTH: ${{ inputs.month }}
+          POST_TO_TEAMS: ${{ github.event_name == 'schedule' || inputs.dry_run == false }}
+          DELIVERY_ENABLED: ${{ vars.ENABLE_MONTHLY_ENHANCEMENT_DIGEST }}
+          TEAMS_ENHANCEMENT_WEBHOOK_URL: ${{ secrets.TEAMS_ENHANCEMENT_WEBHOOK_URL }}
+        run: |
+          $post = $env:POST_TO_TEAMS -eq 'true'
+          if ($post -and $env:DELIVERY_ENABLED -ne 'true') {
+            throw 'Delivery is disabled. Preview first, then set ENABLE_MONTHLY_ENHANCEMENT_DIGEST=true.'
+          }
+          .\.github\scripts\Send-MonthlyEnhancementDigest.ps1 `
+            -Repository $env:GITHUB_REPOSITORY `
+            -Month $env:REPORT_MONTH `
+            -ProjectUrl 'https://github.com/orgs/microsoft/projects/2576' `
+            -ReportPath (Join-Path $env:RUNNER_TEMP 'monthly-enhancement-digest.md') `
+            -Post:$post
