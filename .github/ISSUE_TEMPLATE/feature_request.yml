@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest an improvement to Windows Containers.
+labels:
+  - enhancement
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve Windows Containers. Search existing issues
+        before submitting; if your request already exists, add your scenario there.
+
+        This issue is public. Do not include credentials, customer-confidential
+        information, internal work-item links, or private diagnostic files.
+        A request or triage status is not a commitment to implementation or a
+        delivery date. Product updates will be shared on the issue when available.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature request related to a problem? Please describe.
+      description: Explain the scenario you cannot accomplish today.
+      placeholder: When I use Windows Containers to..., I cannot...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like
+      description: Describe the capability and expected behavior, not just a product name.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Who would benefit, and how?
+      description: Explain the affected workloads, current workaround, and its limitations.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Relevant environment
+      description: If applicable, include the host OS/build, container image, runtime, orchestrator, and isolation mode.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Describe alternatives you've considered
+      description: Include existing approaches you tried or evaluated.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add related public issues, documentation, or non-confidential examples.
