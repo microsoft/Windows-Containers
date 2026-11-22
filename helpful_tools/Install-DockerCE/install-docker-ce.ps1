@@ -646,10 +646,11 @@ Install-Docker()
     if ($DockerPath -eq "default" -or $DockerDPath -eq "default") {
         Write-Output "Checking Docker versions"
         #Get the list of .zip packages available from docker.
-        $availableVersions = ((Invoke-WebRequest -Uri $DefaultDockerLocation -UseBasicParsing).Links | Where-Object {$_.href -like "docker*"}).href | Sort-Object -Descending
+        $availableVersions = ((Invoke-WebRequest -Uri $DefaultDockerLocation -UseBasicParsing).Links | Where-Object {$_.href -like "docker*"}).href
 
-        #Parse the versions from the file names
-        $availableVersions = ($availableVersions | Select-String -Pattern "docker-(\d+\.\d+\.\d+).+"  -AllMatches | Select-Object -Expand Matches | %{ $_.Groups[1].Value })
+        #Parse the versions from the file names and sort them as versions, newest first.
+        #Sorting the file names as strings would put docker-29.9.3.zip above docker-29.10.0.zip.
+        $availableVersions = ($availableVersions | Select-String -Pattern "docker-(\d+\.\d+\.\d+).+"  -AllMatches | Select-Object -Expand Matches | %{ $_.Groups[1].Value } | Sort-Object -Descending { [version]$_ })
         $version = $availableVersions[0]
 
         if($DockerVersion -ne "latest") {
